@@ -86,28 +86,58 @@ final class PanoramaViewController: UIViewController {
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
             <style>
-                html, body, #pano { width: 100%; height: 100%; margin: 0; padding: 0; }
+                html, body, #pano { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; }
                 #empty-tip {
                     position: absolute; top: 50%; left: 0; right: 0;
                     transform: translateY(-50%);
                     text-align: center; color: #999; font-size: 14px;
                     font-family: -apple-system, sans-serif;
-                    display: none;
+                    display: block;
                 }
             </style>
             <script src="https://api.map.baidu.com/api?v=3.0&ak=\(Constants.baiduMapAPIKey)"></script>
         </head>
         <body>
             <div id="pano"></div>
-            <div id="empty-tip">该位置暂无全景数据</div>
+            <div id="empty-tip">正在加载百度全景...</div>
             <script>
-                var point = new BMap.Point(\(longitude), \(latitude));
-                var pano = new BMap.Panorama("pano");
-                pano.setPosition(point);
-                pano.setPov({heading: 0, pitch: 0});
-                pano.addEventListener("emptyposition", function () {
+                function showEmpty() {
+                    document.getElementById("empty-tip").innerText = "该位置暂无全景数据";
                     document.getElementById("empty-tip").style.display = "block";
-                });
+                }
+
+                function hideEmpty() {
+                    document.getElementById("empty-tip").style.display = "none";
+                }
+
+                function initPanorama() {
+                    try {
+                        var point = new BMap.Point(\(longitude), \(latitude));
+                        var pano = new BMap.Panorama("pano");
+                        var service = new BMap.PanoramaService();
+
+                        service.getPanoramaByLocation(point, 5000, function(data) {
+                            if (data && data.id) {
+                                hideEmpty();
+                                pano.setId(data.id);
+                                pano.setPov({heading: 0, pitch: 0});
+                            } else {
+                                hideEmpty();
+                                pano.setPosition(point);
+                                pano.setPov({heading: 0, pitch: 0});
+                                pano.addEventListener("emptyposition", showEmpty);
+                                setTimeout(showEmpty, 2500);
+                            }
+                        });
+                    } catch (e) {
+                        var point = new BMap.Point(\(longitude), \(latitude));
+                        var pano = new BMap.Panorama("pano");
+                        pano.setPosition(point);
+                        pano.setPov({heading: 0, pitch: 0});
+                    }
+                }
+
+                window.onload = initPanorama;
             </script>
         </body>
         </html>
@@ -122,5 +152,10 @@ extension PanoramaViewController: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         activityIndicator.stopAnimating()
+    }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        activityIndicator.stopAnimating()
+        webView.loadHTMLString(Self.panoramaHTML(latitude: latitude, longitude: longitude), baseURL: URL(string: "https://api.map.baidu.com"))
     }
 }

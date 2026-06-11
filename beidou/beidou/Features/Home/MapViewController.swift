@@ -206,16 +206,17 @@ final class MapViewController: UIViewController {
         ])
     }
 
-    // MARK: - 左侧悬浮按钮: 全景 / 地铁 / 指南针(北)
+    // MARK: - 左侧悬浮按钮: 全景 / 世界景点全景 / 地铁 / 指南针(北)
 
     private func setupLeftButtons() {
         let panoramaButton = makeFloatingButton(icon: "view.3d", action: #selector(tapPanorama))
+        let worldPanoramaButton = makeFloatingButton(icon: "globe.europe.africa.fill", action: #selector(tapWorldPanorama))
         let metroButton = makeFloatingButton(icon: "tram", action: #selector(tapMetro))
         northButton.setImage(UIImage(systemName: "location.north.fill"), for: .normal)
         styleFloatingButton(northButton)
         northButton.addTarget(self, action: #selector(tapNorth), for: .touchUpInside)
 
-        let stack = UIStackView(arrangedSubviews: [panoramaButton, metroButton, northButton])
+        let stack = UIStackView(arrangedSubviews: [panoramaButton, worldPanoramaButton, metroButton, northButton])
         stack.axis = .vertical
         stack.spacing = 14
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -363,6 +364,10 @@ final class MapViewController: UIViewController {
             PanoramaViewController(latitude: coordinate.latitude, longitude: coordinate.longitude),
             animated: true
         )
+    }
+
+    @objc private func tapWorldPanorama() {
+        navigationController?.pushViewController(WorldPanoramaListViewController(), animated: true)
     }
 
     @objc private func tapMetro() {
