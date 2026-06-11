@@ -1,0 +1,60 @@
+PODS:
+  - Ads-CN-Beta/BUAdSDK (7.6.0.3)
+  - Ads-CN-Beta/CSJMediation-Only (7.6.0.3):
+    - Ads-CN-Beta/BUAdSDK
+  - AMapFoundation (1.9.0)
+  - AMapLocation (2.12.0):
+    - AMapFoundation (>= 1.9.0)
+  - AMapNavi (11.2.000):
+    - AMapFoundation (>= 1.9.0)
+  - AMapSearch (9.8.0):
+    - AMapFoundation (>= 1.9.0)
+  - BaiduMapKit (7.1.0):
+    - BaiduMapKit/Base (= 7.1.0)
+    - BaiduMapKit/Map (= 7.1.0)
+    - BaiduMapKit/Search (= 7.1.0)
+    - BaiduMapKit/Utils (= 7.1.0)
+  - BaiduMapKit/Base (7.1.0)
+  - BaiduMapKit/Map (7.1.0):
+    - BaiduMapKit/Base
+  - BaiduMapKit/Search (7.1.0):
+    - BaiduMapKit/Base
+  - BaiduMapKit/Utils (7.1.0):
+    - BaiduMapKit/Base
+  - UMCommon (7.5.11):
+    - UMDevice
+  - UMDevice (3.6.0)
+
+DEPENDENCIES:
+  - Ads-CN-Beta/CSJMediation-Only (= 7.6.0.3)
+  - AMapLocation
+  - AMapNavi
+  - AMapSearch
+  - BaiduMapKit
+  - UMCommon
+  - UMDevice
+
+SPEC REPOS:
+  trunk:
+    - Ads-CN-Beta
+    - AMapFoundation
+    - AMapLocation
+    - AMapNavi
+    - AMapSearch
+    - BaiduMapKit
+    - UMCommon
+    - UMDevice
+
+SPEC CHECKSUMS:
+  Ads-CN-Beta: 870e3cb16f5fcd8c6ab3296210fc8c4b43e9d752
+  AMapFoundation: 5f01fcabd1e591967e52178d2d96dac843396285
+  AMapLocation: 51549dc73f5bfa8806c33857ad2079fa6215bb49
+  AMapNavi: 3c55c45e1653af0dbfd2a0c760bf39741e860cb1
+  AMapSearch: ec339fc3cf772d5ff657f02397888391b4b1bde8
+  BaiduMapKit: 464555167d441b8e2f64c6a654505bd5dbc41e26
+  UMCommon: d652b3b372a801b36db203f5b546ab3e15676898
+  UMDevice: 20b7b3c37a36b2c5c7ca8b5a54386ff9ed2b3b19
+
+PODFILE CHECKSUM: 6866d062bb504d53322f95c36f006babc0cafb8a
+
+COCOAPODS: 1.16.2

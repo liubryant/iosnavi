@@ -1,0 +1,12 @@
+.DS_Store
+
+# CocoaPods dependencies are restored with `pod install`.
+beidou/Pods/
+
+# Xcode user-local state
+**/xcuserdata/
+*.xcuserstate
+
+# Build output
+DerivedData/
+build/

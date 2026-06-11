@@ -1,0 +1,47 @@
+platform :ios, '14.0'
+
+target 'beidou' do
+  use_frameworks!
+
+  # 百度地图 iOS SDK (首页地图)
+  pod 'BaiduMapKit'
+
+  # 高德地图 iOS SDK: 导航 + 搜索 + 定位 (首页地图使用百度地图)
+  pod 'AMapNavi'
+  pod 'AMapSearch'
+  pod 'AMapLocation'
+
+  # GroMore(穿山甲) 广告 SDK
+  pod 'Ads-CN-Beta', '7.6.0.3', :subspecs => ['CSJMediation-Only']
+
+  # 友盟统计 SDK
+  pod 'UMCommon'
+  pod 'UMDevice'
+
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
+    end
+  end
+
+  installer.aggregate_targets.each do |aggregate_target|
+    aggregate_target.xcconfigs.each do |_, xcconfig|
+      xcconfig.attributes['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
+      xcconfig.attributes.delete('VALID_ARCHS[sdk=iphonesimulator*]')
+      xcconfig.save_as(aggregate_target.xcconfig_path)
+    end
+  end
+
+  Dir.glob(File.join(__dir__, 'Pods', 'Target Support Files', '**', '*.xcconfig')).each do |path|
+    content = File.read(path)
+    lines = content.lines.reject { |line| line.start_with?('VALID_ARCHS[sdk=iphonesimulator*]') }
+    unless lines.any? { |line| line.start_with?('EXCLUDED_ARCHS[sdk=iphonesimulator*]') }
+      lines.insert(0, "EXCLUDED_ARCHS[sdk=iphonesimulator*] = arm64\n")
+    end
+    content = lines.join
+    File.write(path, content)
+  end
+end
