@@ -18,6 +18,7 @@ final class PanoramaViewController: UIViewController {
 
     private var webView: WKWebView?
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
+    private let backButton = UIButton(type: .system)
 
     init(latitude: Double? = nil, longitude: Double? = nil) {
         if let latitude = latitude, let longitude = longitude {
@@ -46,12 +47,18 @@ final class PanoramaViewController: UIViewController {
         let webView = WKWebView(frame: .zero)
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.navigationDelegate = self
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
+        webView.scrollView.bounces = false
+        webView.backgroundColor = .black
+        webView.scrollView.backgroundColor = .black
         view.addSubview(webView)
         self.webView = webView
 
         activityIndicator.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(activityIndicator)
         activityIndicator.startAnimating()
+
+        setupBackButton()
 
         NSLayoutConstraint.activate([
             webView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -64,6 +71,31 @@ final class PanoramaViewController: UIViewController {
         ])
 
         webView.loadHTMLString(Self.panoramaHTML(latitude: latitude, longitude: longitude), baseURL: URL(string: "https://api.map.baidu.com"))
+    }
+
+    private func setupBackButton() {
+        var configuration = UIButton.Configuration.filled()
+        configuration.image = UIImage(systemName: "chevron.left")
+        configuration.baseForegroundColor = .white
+        configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.52)
+        configuration.cornerStyle = .capsule
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
+        backButton.configuration = configuration
+        backButton.accessibilityLabel = "返回"
+        backButton.translatesAutoresizingMaskIntoConstraints = false
+        backButton.addTarget(self, action: #selector(tapBack), for: .touchUpInside)
+
+        view.addSubview(backButton)
+        NSLayoutConstraint.activate([
+            backButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            backButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            backButton.widthAnchor.constraint(equalToConstant: 42),
+            backButton.heightAnchor.constraint(equalToConstant: 42)
+        ])
+    }
+
+    @objc private func tapBack() {
+        navigationController?.popViewController(animated: true)
     }
 
     override func viewWillAppear(_ animated: Bool) {

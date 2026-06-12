@@ -10,6 +10,19 @@ import UIKit
 final class RemoteImageView: UIImageView {
     private var task: URLSessionDataTask?
 
+    func setImage(named imageName: String, fallbackURL: URL) {
+        task?.cancel()
+        contentMode = .scaleAspectFill
+
+        if let localImage = UIImage(named: imageName) {
+            image = localImage
+            tintColor = nil
+            return
+        }
+
+        setImage(url: fallbackURL)
+    }
+
     func setImage(url: URL) {
         task?.cancel()
         image = UIImage(systemName: "photo")

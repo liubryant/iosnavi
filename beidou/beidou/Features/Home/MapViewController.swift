@@ -32,6 +32,7 @@ final class MapViewController: UIViewController {
 
     private let searchBar = UIView()
     private let searchLabel = UILabel()
+    private let cloudPanoramaButton = UIButton(type: .system)
     private let bottomLabel = UILabel()
     private let trafficButton = UIButton(type: .system)
     private let northButton = UIButton(type: .system)
@@ -158,12 +159,17 @@ final class MapViewController: UIViewController {
         searchLabel.text = "请输入终点"
         searchLabel.font = .systemFont(ofSize: 15)
         searchLabel.textColor = .secondaryLabel
+        searchLabel.adjustsFontSizeToFitWidth = true
+        searchLabel.minimumScaleFactor = 0.72
         searchLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        configureCloudPanoramaButton()
 
         searchBar.addSubview(searchIcon)
         searchBar.addSubview(searchLabel)
         view.addSubview(menuButton)
         view.addSubview(searchBar)
+        view.addSubview(cloudPanoramaButton)
 
         NSLayoutConstraint.activate([
             menuButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
@@ -173,8 +179,13 @@ final class MapViewController: UIViewController {
 
             searchBar.centerYAnchor.constraint(equalTo: menuButton.centerYAnchor),
             searchBar.leadingAnchor.constraint(equalTo: menuButton.trailingAnchor, constant: 12),
-            searchBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            searchBar.trailingAnchor.constraint(equalTo: cloudPanoramaButton.leadingAnchor, constant: -8),
             searchBar.heightAnchor.constraint(equalToConstant: 44),
+
+            cloudPanoramaButton.centerYAnchor.constraint(equalTo: menuButton.centerYAnchor),
+            cloudPanoramaButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            cloudPanoramaButton.widthAnchor.constraint(equalTo: menuButton.widthAnchor, multiplier: 2),
+            cloudPanoramaButton.heightAnchor.constraint(equalToConstant: 44),
 
             searchIcon.leadingAnchor.constraint(equalTo: searchBar.leadingAnchor, constant: 16),
             searchIcon.centerYAnchor.constraint(equalTo: searchBar.centerYAnchor),
@@ -182,8 +193,33 @@ final class MapViewController: UIViewController {
             searchIcon.heightAnchor.constraint(equalToConstant: 18),
 
             searchLabel.leadingAnchor.constraint(equalTo: searchIcon.trailingAnchor, constant: 10),
+            searchLabel.trailingAnchor.constraint(lessThanOrEqualTo: searchBar.trailingAnchor, constant: -12),
             searchLabel.centerYAnchor.constraint(equalTo: searchBar.centerYAnchor)
         ])
+    }
+
+    private func configureCloudPanoramaButton() {
+        var configuration = UIButton.Configuration.filled()
+        configuration.title = "720云"
+        configuration.image = UIImage(systemName: "photo")
+        configuration.imagePadding = 4
+        configuration.cornerStyle = .capsule
+        configuration.baseBackgroundColor = .systemBackground
+        configuration.baseForegroundColor = .label
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8)
+        configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 12, weight: .medium)
+        configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var outgoing = incoming
+            outgoing.font = .systemFont(ofSize: 13, weight: .medium)
+            return outgoing
+        }
+        cloudPanoramaButton.configuration = configuration
+        cloudPanoramaButton.layer.cornerRadius = 22
+        cloudPanoramaButton.layer.cornerCurve = .continuous
+        cloudPanoramaButton.layer.masksToBounds = false
+        applyShadow(to: cloudPanoramaButton)
+        cloudPanoramaButton.translatesAutoresizingMaskIntoConstraints = false
+        cloudPanoramaButton.addTarget(self, action: #selector(tapCloudPanorama), for: .touchUpInside)
     }
 
     // MARK: - 右侧悬浮按钮: 周边 / 天气 / 路况
@@ -191,11 +227,12 @@ final class MapViewController: UIViewController {
     private func setupRightButtons() {
         let aroundButton = makeFloatingButton(icon: "mappin.and.ellipse", action: #selector(tapAround))
         let weatherButton = makeFloatingButton(icon: "cloud.sun", action: #selector(tapWeather))
+        let cloudButton = makeFloatingTextButton(title: "720", action: #selector(tapCloudPanorama))
         trafficButton.setImage(UIImage(systemName: "car"), for: .normal)
         styleFloatingButton(trafficButton)
         trafficButton.addTarget(self, action: #selector(tapTraffic), for: .touchUpInside)
 
-        let stack = UIStackView(arrangedSubviews: [aroundButton, weatherButton, trafficButton])
+        let stack = UIStackView(arrangedSubviews: [aroundButton, weatherButton, trafficButton, cloudButton])
         stack.axis = .vertical
         stack.spacing = 14
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -250,6 +287,15 @@ final class MapViewController: UIViewController {
     private func makeFloatingButton(icon: String, action: Selector) -> UIButton {
         let button = UIButton(type: .system)
         button.setImage(UIImage(systemName: icon), for: .normal)
+        styleFloatingButton(button)
+        button.addTarget(self, action: action, for: .touchUpInside)
+        return button
+    }
+
+    private func makeFloatingTextButton(title: String, action: Selector) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setTitle(title, for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 13, weight: .bold)
         styleFloatingButton(button)
         button.addTarget(self, action: action, for: .touchUpInside)
         return button
@@ -337,6 +383,10 @@ final class MapViewController: UIViewController {
 
     @objc private func tapSearch() {
         navigationController?.pushViewController(RoutePlanViewController(startLocation: currentLocation), animated: true)
+    }
+
+    @objc private func tapCloudPanorama() {
+        navigationController?.pushViewController(CloudPanoramaListViewController(), animated: true)
     }
 
     @objc private func tapAround() {

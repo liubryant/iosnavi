@@ -68,6 +68,7 @@ final class WorldPanoramaDetailViewController: UIViewController {
         webView.navigationDelegate = self
         webView.scrollView.isScrollEnabled = false
         webView.scrollView.bounces = false
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.backgroundColor = .secondarySystemBackground
         webView.clipsToBounds = true
         webView.translatesAutoresizingMaskIntoConstraints = false

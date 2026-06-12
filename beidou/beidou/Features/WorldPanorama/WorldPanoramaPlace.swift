@@ -15,6 +15,7 @@ struct WorldPanoramaPlace {
     let latitude: Double
     let longitude: Double
     let imageURL: URL
+    let imageName: String
 
     var searchText: String {
         "\(name) \(region) \(country) \(summary)".lowercased()
@@ -43,15 +44,16 @@ struct WorldPanoramaPlace {
     }
 
     private static var popular: [WorldPanoramaPlace] {
-        Array((north + east + central + south + southwest + northwest + northeast).prefix(50)).map {
+        Array((north + east + central + south + southwest + northwest + northeast).prefix(50)).enumerated().map { index, place in
             WorldPanoramaPlace(
-                name: $0.name,
+                name: place.name,
                 region: "热门",
-                country: $0.country,
-                summary: $0.summary,
-                latitude: $0.latitude,
-                longitude: $0.longitude,
-                imageURL: $0.imageURL
+                country: place.country,
+                summary: place.summary,
+                latitude: place.latitude,
+                longitude: place.longitude,
+                imageURL: place.imageURL,
+                imageName: coverName(for: index, region: "热门")
             )
         }
     }
@@ -136,8 +138,25 @@ struct WorldPanoramaPlace {
                 summary: "国内热门景区，可查看景区入口、道路与周边百度全景。",
                 latitude: center.0 + offset,
                 longitude: center.1 + offset,
-                imageURL: thumbnailURL
+                imageURL: thumbnailURL,
+                imageName: coverName(for: index, region: region)
             )
         }
+    }
+
+    private static func coverName(for index: Int, region: String) -> String {
+        let regionOffset: Int
+        switch region {
+        case "热门": regionOffset = 17
+        case "华北": regionOffset = 0
+        case "华东": regionOffset = 4
+        case "华中": regionOffset = 8
+        case "华南": regionOffset = 12
+        case "西南": regionOffset = 16
+        case "西北": regionOffset = 20
+        case "东北": regionOffset = 6
+        default: regionOffset = 0
+        }
+        return String(format: "ScenicCover%02d", ((index + regionOffset) % 24) + 1)
     }
 }
