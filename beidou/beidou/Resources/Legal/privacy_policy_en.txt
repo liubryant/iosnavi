@@ -1,0 +1,11 @@
+NaviBeidou Privacy Policy
+
+We respect your privacy and protect your personal information. This policy explains what information may be processed when you use NaviBeidou and how it is used.
+
+To provide positioning, route planning, navigation, nearby search, panorama, weather, feedback, analytics, and ad-related services, we may process location information, search keywords, device and network information, app runtime information, feedback content, and optional contact details that you provide.
+
+Some features rely on third-party SDKs or services, including map, navigation, weather, analytics, and advertising providers. These services may process necessary information according to their own privacy rules.
+
+You can manage system permissions such as location, network, and tracking in iOS Settings. If you disable a permission, related features may not work normally, but other available features can still be used.
+
+If you have questions or requests about personal information protection, please contact us through the contact information provided in the app or related service pages.

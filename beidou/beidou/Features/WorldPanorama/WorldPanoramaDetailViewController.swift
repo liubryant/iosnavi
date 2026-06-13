@@ -46,17 +46,17 @@ final class WorldPanoramaDetailViewController: UIViewController {
     }
 
     private func setupUI() {
-        titleLabel.text = "\(place.name) · \(place.country)"
+        titleLabel.text = "\(place.name) · \(place.localizedRegion)"
         titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
         titleLabel.textColor = .label
         titleLabel.numberOfLines = 0
 
-        summaryLabel.text = place.summary
+        summaryLabel.text = place.localizedSummary
         summaryLabel.font = .systemFont(ofSize: 14)
         summaryLabel.textColor = .secondaryLabel
         summaryLabel.numberOfLines = 0
 
-        coordinateLabel.text = String(format: "经纬度 %.6f, %.6f", place.latitude, place.longitude)
+        coordinateLabel.text = String(format: L10n.t("world.coordinate_format"), place.latitude, place.longitude)
         coordinateLabel.font = .monospacedDigitSystemFont(ofSize: 13, weight: .regular)
         coordinateLabel.textColor = .tertiaryLabel
 
@@ -123,13 +123,13 @@ final class WorldPanoramaDetailViewController: UIViewController {
         </head>
         <body>
             <div id="pano"></div>
-            <div id="empty-tip">正在加载百度全景...</div>
+            <div id="empty-tip">\(L10n.t("world.loading"))</div>
             <script>
                 var keyword = \(keyword);
                 var hasLoaded = false;
 
                 function showEmpty() {
-                    document.getElementById("empty-tip").innerText = "该景区附近暂无可用百度全景数据";
+                    document.getElementById("empty-tip").innerText = "\(L10n.t("world.no_baidu_panorama"))";
                     document.getElementById("empty-tip").style.display = "block";
                 }
 

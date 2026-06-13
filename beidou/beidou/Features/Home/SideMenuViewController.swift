@@ -63,20 +63,20 @@ final class SideMenuViewController: UIViewController {
         ])
 
         stack.addArrangedSubview(buildHeader())
-        stack.addArrangedSubview(buildRow(icon: "view.3d", title: "全景/街景", action: #selector(tapPanorama)))
+        stack.addArrangedSubview(buildRow(icon: "view.3d", title: L10n.t("menu.panorama"), action: #selector(tapPanorama)))
         stack.addArrangedSubview(buildDivider())
-        stack.addArrangedSubview(buildRow(icon: "cloud.sun", title: "天气查询", action: #selector(tapWeather)))
+        stack.addArrangedSubview(buildRow(icon: "cloud.sun", title: L10n.t("menu.weather"), action: #selector(tapWeather)))
         stack.addArrangedSubview(buildDivider())
-        stack.addArrangedSubview(buildRow(icon: "doc.text", title: "服务协议", action: #selector(tapServiceAgreement)))
+        stack.addArrangedSubview(buildRow(icon: "doc.text", title: L10n.t("menu.service_agreement"), action: #selector(tapServiceAgreement)))
         stack.addArrangedSubview(buildDivider())
-        stack.addArrangedSubview(buildRow(icon: "hand.raised", title: "隐私政策", action: #selector(tapPrivacyPolicy)))
+        stack.addArrangedSubview(buildRow(icon: "hand.raised", title: L10n.t("menu.privacy_policy"), action: #selector(tapPrivacyPolicy)))
         stack.addArrangedSubview(buildDivider())
-        stack.addArrangedSubview(buildRow(icon: "envelope", title: "用户反馈", action: #selector(tapFeedback)))
+        stack.addArrangedSubview(buildRow(icon: "envelope", title: L10n.t("menu.feedback"), action: #selector(tapFeedback)))
         stack.addArrangedSubview(buildDivider())
-        stack.addArrangedSubview(buildRow(icon: "map", title: "地图类型", action: nil))
+        stack.addArrangedSubview(buildRow(icon: "map", title: L10n.t("menu.map_type"), action: nil))
         stack.addArrangedSubview(buildMapTypeSelector())
         stack.addArrangedSubview(buildDivider(topMargin: 10))
-        stack.addArrangedSubview(buildRow(icon: "location", title: "当前位置", action: nil))
+        stack.addArrangedSubview(buildRow(icon: "location", title: L10n.t("menu.current_location"), action: nil))
         stack.addArrangedSubview(buildCurrentLocationLabel())
         stack.addArrangedSubview(buildBannerContainer())
     }
@@ -171,7 +171,7 @@ final class SideMenuViewController: UIViewController {
 
     private func buildMapTypeSelector() -> UIView {
         let container = UIView()
-        container.heightAnchor.constraint(equalToConstant: 54).isActive = true
+        container.heightAnchor.constraint(equalToConstant: 68).isActive = true
 
         let stack = UIStackView()
         stack.axis = .horizontal
@@ -179,15 +179,15 @@ final class SideMenuViewController: UIViewController {
         stack.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: container.topAnchor),
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 14),
             stack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
             stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20)
         ])
 
-        stack.addArrangedSubview(buildMapTypeOption(type: .satellite, icon: "globe.asia.australia.fill", title: "卫星图", action: #selector(tapSatellite)))
-        stack.addArrangedSubview(buildMapTypeOption(type: .normal, icon: "map.fill", title: "普通图", action: #selector(tapNormal)))
-        stack.addArrangedSubview(buildMapTypeOption(type: .traffic, icon: "car.fill", title: "路况图", action: #selector(tapTraffic)))
+        stack.addArrangedSubview(buildMapTypeOption(type: .satellite, icon: "globe.asia.australia.fill", title: L10n.t("menu.satellite_map"), action: #selector(tapSatellite)))
+        stack.addArrangedSubview(buildMapTypeOption(type: .normal, icon: "map.fill", title: L10n.t("menu.normal_map"), action: #selector(tapNormal)))
+        stack.addArrangedSubview(buildMapTypeOption(type: .traffic, icon: "car.fill", title: L10n.t("menu.traffic_map"), action: #selector(tapTraffic)))
 
         return container
     }

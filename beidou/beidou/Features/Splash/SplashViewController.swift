@@ -14,6 +14,7 @@ final class SplashViewController: UIViewController {
     var onFinish: (() -> Void)?
 
     private var didFinish = false
+    private var didStartShowingAd = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -44,13 +45,16 @@ final class SplashViewController: UIViewController {
 
         PangleSplashAdManager.shared.loadAndShowDefaultSplashAd { [weak self] success, _ in
             // 广告加载失败/无填充 -> 直接进入主页面；加载成功则等待 onClose 回调
-            if !success {
+            if success {
+                self?.didStartShowingAd = true
+            } else {
                 self?.finish()
             }
         }
 
         // 兜底超时保护，避免开屏页无法跳转
         DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+            guard self?.didStartShowingAd == false else { return }
             self?.finish()
         }
     }
@@ -64,6 +68,7 @@ final class SplashViewController: UIViewController {
         }
         guard !didFinish else { return }
         didFinish = true
+        PangleSplashAdManager.shared.cancelSplashAd()
         onFinish?()
     }
 }

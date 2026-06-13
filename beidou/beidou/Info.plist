@@ -11,9 +11,9 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>北斗导航地图</string>
+	<string>卫星导航地图</string>
 	<key>CFBundleDisplayName</key>
-	<string>北斗导航地图</string>
+	<string>卫星导航地图</string>
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
@@ -51,9 +51,9 @@
 
 	<!-- 定位权限: 首页定位、路线规划、导航过程中持续定位 -->
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>北斗导航地图需要获取您的位置信息，以便为您提供地图定位、路线规划与导航服务。</string>
+	<string>卫星导航地图需要获取您的位置信息，以便为您提供地图定位、路线规划与导航服务。</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>北斗导航地图需要在导航过程中持续获取您的位置信息，以便为您提供实时路线引导与语音播报。</string>
+	<string>卫星导航地图需要在导航过程中持续获取您的位置信息，以便为您提供实时路线引导与语音播报。</string>
 
 	<!-- GroMore(穿山甲) 广告标识符权限 -->
 	<key>NSUserTrackingUsageDescription</key>
@@ -72,6 +72,13 @@
 				<true/>
 			</dict>
 			<key>c-ctrip.com</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+			<key>pglstatp-toutiao.com</key>
 			<dict>
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
 				<true/>

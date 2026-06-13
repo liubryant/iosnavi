@@ -10,6 +10,7 @@ import WebKit
 
 final class WorldPanoramaListViewController: UIViewController {
 
+    private let backButton = UIButton(type: .system)
     private let searchBar = UISearchBar()
     private let categoryScrollView = UIScrollView()
     private let categoryStackView = UIStackView()
@@ -21,7 +22,7 @@ final class WorldPanoramaListViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "国内热门景区全景"
+        title = L10n.t("world.title")
         view.backgroundColor = .systemGroupedBackground
         setupUI()
     }
@@ -37,7 +38,18 @@ final class WorldPanoramaListViewController: UIViewController {
     }
 
     private func setupUI() {
-        searchBar.placeholder = "搜索景区、城市或省份"
+        var backButtonConfiguration = UIButton.Configuration.filled()
+        backButtonConfiguration.image = UIImage(systemName: "chevron.left")
+        backButtonConfiguration.baseForegroundColor = .white
+        backButtonConfiguration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.52)
+        backButtonConfiguration.cornerStyle = .capsule
+        backButtonConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
+        backButton.configuration = backButtonConfiguration
+        backButton.accessibilityLabel = L10n.t("common.back")
+        backButton.translatesAutoresizingMaskIntoConstraints = false
+        backButton.addTarget(self, action: #selector(tapBack), for: .touchUpInside)
+
+        searchBar.placeholder = L10n.t("world.search_placeholder")
         searchBar.delegate = self
         searchBar.searchBarStyle = .minimal
         searchBar.translatesAutoresizingMaskIntoConstraints = false
@@ -52,7 +64,7 @@ final class WorldPanoramaListViewController: UIViewController {
 
         WorldPanoramaPlace.categories.enumerated().forEach { index, category in
             let button = UIButton(type: .system)
-            button.setTitle(category, for: .normal)
+            button.setTitle(Self.localizedCategoryTitle(category), for: .normal)
             button.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
             button.layer.cornerRadius = 15
             button.contentEdgeInsets = UIEdgeInsets(top: 7, left: 14, bottom: 7, right: 14)
@@ -69,20 +81,26 @@ final class WorldPanoramaListViewController: UIViewController {
         tableView.keyboardDismissMode = .onDrag
         tableView.translatesAutoresizingMaskIntoConstraints = false
 
-        emptyLabel.text = "未找到相关景点"
+        emptyLabel.text = L10n.t("world.empty")
         emptyLabel.font = .systemFont(ofSize: 15)
         emptyLabel.textColor = .secondaryLabel
         emptyLabel.textAlignment = .center
         emptyLabel.isHidden = true
         tableView.backgroundView = emptyLabel
 
+        view.addSubview(backButton)
         view.addSubview(searchBar)
         view.addSubview(categoryScrollView)
         categoryScrollView.addSubview(categoryStackView)
         view.addSubview(tableView)
         NSLayoutConstraint.activate([
+            backButton.centerYAnchor.constraint(equalTo: searchBar.centerYAnchor),
+            backButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            backButton.widthAnchor.constraint(equalToConstant: 42),
+            backButton.heightAnchor.constraint(equalToConstant: 42),
+
             searchBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            searchBar.leadingAnchor.constraint(equalTo: backButton.trailingAnchor, constant: 4),
             searchBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
 
             categoryScrollView.topAnchor.constraint(equalTo: searchBar.bottomAnchor),
@@ -111,6 +129,20 @@ final class WorldPanoramaListViewController: UIViewController {
         tableView.reloadData()
     }
 
+    private static func localizedCategoryTitle(_ category: String) -> String {
+        switch category {
+        case "热门": return L10n.t("world.category.popular")
+        case "华北": return L10n.t("world.category.north")
+        case "华东": return L10n.t("world.category.east")
+        case "华中": return L10n.t("world.category.central")
+        case "华南": return L10n.t("world.category.south")
+        case "西南": return L10n.t("world.category.southwest")
+        case "西北": return L10n.t("world.category.northwest")
+        case "东北": return L10n.t("world.category.northeast")
+        default: return category
+        }
+    }
+
     @objc private func tapCategory(_ sender: UIButton) {
         selectedCategory = WorldPanoramaPlace.categories[sender.tag]
         updateCategoryButtons()
@@ -119,11 +151,15 @@ final class WorldPanoramaListViewController: UIViewController {
     }
 
     private func updateCategoryButtons() {
-        for button in categoryButtons {
-            let selected = button.currentTitle == selectedCategory
+        for (index, button) in categoryButtons.enumerated() {
+            let selected = WorldPanoramaPlace.categories[index] == selectedCategory
             button.backgroundColor = selected ? (UIColor(named: "ThemeBlue") ?? .systemBlue) : .secondarySystemGroupedBackground
             button.tintColor = selected ? .white : .label
         }
+    }
+
+    @objc private func tapBack() {
+        navigationController?.popViewController(animated: true)
     }
 }
 
@@ -216,8 +252,8 @@ private final class WorldPanoramaPlaceCell: UITableViewCell {
 
     func configure(with place: WorldPanoramaPlace) {
         titleLabel.text = place.name
-        subtitleLabel.text = "\(place.region) · \(place.country)"
-        summaryLabel.text = place.summary
+        subtitleLabel.text = place.localizedCountry
+        summaryLabel.text = place.localizedSummary
         placeImageView.setImage(named: place.imageName, fallbackURL: place.imageURL)
     }
 }
@@ -226,6 +262,31 @@ private struct CloudPanoramaItem {
     let title: String
     let url: URL
     let imageName: String
+
+    var localizedTitle: String {
+        guard Locale.current.languageCode != "zh" else { return title }
+        switch title {
+        case "北京天坛": return "Temple of Heaven"
+        case "清华大学": return "Tsinghua University"
+        case "冰雪世界": return "Ice and Snow World"
+        case "元宇宙艺术展": return "Metaverse Art Exhibition"
+        case "秦始皇兵马俑": return "Terracotta Warriors"
+        case "深圳像素摄影": return "Shenzhen Pixel Photography"
+        case "拉萨布达拉宫": return "Potala Palace"
+        case "贡嘎攀登": return "Gongga Climb"
+        case "北京故宫": return "Forbidden City"
+        case "泰国曼谷": return "Bangkok, Thailand"
+        case "稻城亚丁": return "Daocheng Yading"
+        case "故宫雪景": return "Forbidden City in Snow"
+        case "橘子洲头": return "Orange Isle"
+        case "黄山风景区": return "Huangshan Scenic Area"
+        case "广州塔": return "Canton Tower"
+        case "上海陆家嘴": return "Shanghai Lujiazui"
+        case "邓紫棋演唱会场馆": return "G.E.M. Concert Venue"
+        case "全景看北京": return "Panoramic Beijing"
+        default: return title
+        }
+    }
 }
 
 final class CloudPanoramaListViewController: UIViewController {
@@ -233,24 +294,25 @@ final class CloudPanoramaListViewController: UIViewController {
     private let items: [CloudPanoramaItem] = [
         .init(title: "北京天坛", url: URL(string: "https://www.720yun.com/t/83vkcli708q?scene_id=59434172")!, imageName: "CloudPanorama01"),
         .init(title: "清华大学", url: URL(string: "https://www.720yun.com/vr/85c24wagung")!, imageName: "CloudPanorama02"),
+        .init(title: "贡嘎攀登", url: URL(string: "https://www.720yun.com/vr/792jkrtnev5")!, imageName: "CloudPanorama08"),
+        .init(title: "稻城亚丁", url: URL(string: "https://www.720yun.com/t/9a4j5gtkuy0?scene_id=11843262")!, imageName: "CloudPanorama11"),
+        .init(title: "上海陆家嘴", url: URL(string: "https://www.720yun.com/t/59vkbyplr7q?scene_id=90167954")!, imageName: "CloudPanorama16"),
+        .init(title: "黄山风景区", url: URL(string: "https://www.720yun.com/t/favkte8w0fb?scene_id=69676267")!, imageName: "CloudPanorama14"),
+        .init(title: "橘子洲头", url: URL(string: "https://www.720yun.com/t/f562c9zfuci?scene_id=1589907")!, imageName: "CloudPanorama13"),
+        .init(title: "全景看北京", url: URL(string: "https://www.720yun.com/t/942jOryutu8?scene_id=2095322")!, imageName: "CloudPanorama18"),
         .init(title: "冰雪世界", url: URL(string: "https://www.720yun.com/vr/cccj5syntn3")!, imageName: "CloudPanorama03"),
         .init(title: "元宇宙艺术展", url: URL(string: "https://www.720yun.com/vr/28a2eqiuwcr")!, imageName: "CloudPanorama04"),
         .init(title: "秦始皇兵马俑", url: URL(string: "https://www.720yun.com/t/07cjrOhfzk4?scene_id=28286004")!, imageName: "CloudPanorama05"),
         .init(title: "深圳像素摄影", url: URL(string: "https://www.720yun.com/t/35vkcmdlpqb?scene_id=67060540")!, imageName: "CloudPanorama06"),
         .init(title: "拉萨布达拉宫", url: URL(string: "https://www.720yun.com/vr/c8027wsg9br")!, imageName: "CloudPanorama07"),
-        .init(title: "贡嘎攀登", url: URL(string: "https://www.720yun.com/vr/792jkrtnev5")!, imageName: "CloudPanorama08"),
         .init(title: "北京故宫", url: URL(string: "https://www.720yun.com/t/942jOryutu8?scene_id=2095322")!, imageName: "CloudPanorama09"),
         .init(title: "泰国曼谷", url: URL(string: "https://www.720yun.com/t/74b22jidaen?scene_id=343404")!, imageName: "CloudPanorama10"),
-        .init(title: "稻城亚丁", url: URL(string: "https://www.720yun.com/t/9a4j5gtkuy0?scene_id=11843262")!, imageName: "CloudPanorama11"),
         .init(title: "故宫雪景", url: URL(string: "https://www.720yun.com/t/df4jussOrw1?scene_id=60406967")!, imageName: "CloudPanorama12"),
-        .init(title: "橘子洲头", url: URL(string: "https://www.720yun.com/t/f562c9zfuci?scene_id=1589907")!, imageName: "CloudPanorama13"),
-        .init(title: "黄山风景区", url: URL(string: "https://www.720yun.com/t/favkte8w0fb?scene_id=69676267")!, imageName: "CloudPanorama14"),
         .init(title: "广州塔", url: URL(string: "https://www.720yun.com/t/35vkOm7lgqe?scene_id=56460523")!, imageName: "CloudPanorama15"),
-        .init(title: "上海陆家嘴", url: URL(string: "https://www.720yun.com/t/59vkbyplr7q?scene_id=90167954")!, imageName: "CloudPanorama16"),
-        .init(title: "邓紫棋演唱会场馆", url: URL(string: "https://www.720yun.com/vr/d12j57ekuv9")!, imageName: "CloudPanorama17"),
-        .init(title: "全景看北京", url: URL(string: "https://www.720yun.com/t/942jOryutu8?scene_id=2095322")!, imageName: "CloudPanorama18")
+        .init(title: "邓紫棋演唱会场馆", url: URL(string: "https://www.720yun.com/vr/d12j57ekuv9")!, imageName: "CloudPanorama17")
     ]
     private let backButton = UIButton(type: .system)
+    private let titleLabel = UILabel()
 
     private lazy var collectionView: UICollectionView = {
         let layout = UICollectionViewFlowLayout()
@@ -269,7 +331,7 @@ final class CloudPanoramaListViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "720云"
+        title = L10n.t("world.source_title")
         view.backgroundColor = .systemGroupedBackground
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             image: UIImage(systemName: "chevron.left"),
@@ -279,6 +341,7 @@ final class CloudPanoramaListViewController: UIViewController {
         )
         setupUI()
         setupBackButton()
+        setupTitleLabel()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -309,7 +372,7 @@ final class CloudPanoramaListViewController: UIViewController {
         configuration.cornerStyle = .capsule
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
         backButton.configuration = configuration
-        backButton.accessibilityLabel = "返回"
+        backButton.accessibilityLabel = L10n.t("common.back")
         backButton.translatesAutoresizingMaskIntoConstraints = false
         backButton.addTarget(self, action: #selector(tapBack), for: .touchUpInside)
 
@@ -319,6 +382,21 @@ final class CloudPanoramaListViewController: UIViewController {
             backButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
             backButton.widthAnchor.constraint(equalToConstant: 42),
             backButton.heightAnchor.constraint(equalToConstant: 42)
+        ])
+    }
+
+    private func setupTitleLabel() {
+        titleLabel.text = L10n.t("world.cloud_panorama_title")
+        titleLabel.font = .systemFont(ofSize: 17, weight: .semibold)
+        titleLabel.textAlignment = .center
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        view.addSubview(titleLabel)
+        NSLayoutConstraint.activate([
+            titleLabel.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
+            titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            titleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: backButton.trailingAnchor, constant: 8),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -12)
         ])
     }
 
@@ -344,7 +422,7 @@ extension CloudPanoramaListViewController: UICollectionViewDataSource, UICollect
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         let item = items[indexPath.item]
         navigationController?.pushViewController(
-            CloudPanoramaWebViewController(title: item.title, url: item.url),
+            CloudPanoramaWebViewController(title: item.localizedTitle, url: item.url),
             animated: true
         )
     }
@@ -411,7 +489,7 @@ private final class CloudPanoramaCell: UICollectionViewCell {
     }
 
     func configure(with item: CloudPanoramaItem) {
-        titleLabel.text = item.title
+        titleLabel.text = item.localizedTitle
         thumbnailView.image = UIImage(named: item.imageName) ?? UIImage(systemName: "photo.on.rectangle.angled")
     }
 }
@@ -511,7 +589,7 @@ private final class CloudPanoramaWebViewController: UIViewController {
         configuration.cornerStyle = .capsule
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
         backButton.configuration = configuration
-        backButton.accessibilityLabel = "返回"
+        backButton.accessibilityLabel = L10n.t("common.back")
         backButton.translatesAutoresizingMaskIntoConstraints = false
         backButton.addTarget(self, action: #selector(tapBack), for: .touchUpInside)
 

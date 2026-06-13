@@ -19,6 +19,11 @@ struct PermissionInfo {
 
 enum ApiClient {
 
+    struct WeatherAPIResult {
+        let json: [String: Any]?
+        let errorMessage: String?
+    }
+
     /// 查询广告展示权限/版本信息
     static func fetchPermissionInfo(completion: @escaping (PermissionInfo?) -> Void) {
         guard let url = URL(string: UrlConstants.permissionInfo) else {
@@ -123,6 +128,13 @@ enum ApiClient {
 
     /// 查询高德天气信息。city 可传城市名或 adcode；extensions="base"返回实时天气(lives)，"all"返回预报(forecasts)
     static func fetchWeather(city: String, extensions: String = "base", completion: @escaping ([String: Any]?) -> Void) {
+        fetchWeatherDetail(city: city, extensions: extensions) { result in
+            completion(result.json)
+        }
+    }
+
+    /// 查询高德天气信息并保留接口错误原因，便于排查 Key/权限/参数问题。
+    static func fetchWeatherDetail(city: String, extensions: String = "base", completion: @escaping (WeatherAPIResult) -> Void) {
         var components = URLComponents(string: UrlConstants.amapWeather)
         components?.queryItems = [
             URLQueryItem(name: "key", value: Constants.amapWebServiceKey),
@@ -130,16 +142,29 @@ enum ApiClient {
             URLQueryItem(name: "extensions", value: extensions)
         ]
         guard let url = components?.url else {
-            completion(nil)
+            completion(WeatherAPIResult(json: nil, errorMessage: "Invalid weather request URL"))
             return
         }
         let task = URLSession.shared.dataTask(with: url) { data, _, error in
-            guard let data = data, error == nil,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                DispatchQueue.main.async { completion(nil) }
+            if let error {
+                DispatchQueue.main.async {
+                    completion(WeatherAPIResult(json: nil, errorMessage: error.localizedDescription))
+                }
                 return
             }
-            DispatchQueue.main.async { completion(json) }
+            guard let data = data, error == nil,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                DispatchQueue.main.async {
+                    completion(WeatherAPIResult(json: nil, errorMessage: "Invalid weather response"))
+                }
+                return
+            }
+            let status = json["status"] as? String
+            let info = json["info"] as? String
+            let infocode = json["infocode"] as? String
+            let message = [info, infocode].compactMap { $0 }.joined(separator: " / ")
+            let errorMessage = status == "1" || message.isEmpty ? nil : message
+            DispatchQueue.main.async { completion(WeatherAPIResult(json: json, errorMessage: errorMessage)) }
         }
         task.resume()
     }

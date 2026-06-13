@@ -1,0 +1,5 @@
+Welcome to NaviBeidou!
+
+NaviBeidou provides map positioning, route planning, navigation, nearby search, panorama, weather, feedback, and related services. To provide these features, we may request location and network permissions after you agree, and may process device information, network information, app runtime information, and the content you submit.
+
+Please read the User Agreement and Privacy Policy carefully. By tapping Agree and Continue, you confirm that you understand and agree to the terms described in those documents.

@@ -32,9 +32,17 @@ final class PangleFeedAdManager: NSObject {
     /// 加载信息流广告，渲染成功后铺满容器。
     func loadFeedAd(in container: UIView, rootViewController: UIViewController) {
         #if canImport(BUAdSDK)
-        guard Constants.isInlineTemplateAdEnabled,
-              PangleAdManager.shared.isSDKInitialized(),
+        guard SpUtil.bool(.agreementAccepted),
+              Constants.isInlineTemplateAdEnabled,
               !Constants.isCloseAd else { return }
+
+        guard PangleAdManager.shared.isSDKInitialized() else {
+            PangleAdManager.shared.initialize { [weak self, weak container, weak rootViewController] success in
+                guard success, let container, let rootViewController else { return }
+                self?.loadFeedAd(in: container, rootViewController: rootViewController)
+            }
+            return
+        }
 
         DispatchQueue.main.async { [weak self, weak container, weak rootViewController] in
             guard let self, let container, let rootViewController else { return }

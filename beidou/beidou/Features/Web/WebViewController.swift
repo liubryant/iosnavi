@@ -80,7 +80,10 @@ final class WebViewController: UIViewController {
 
     /// 读取打包在 Resources/Legal 下的文本资源
     static func loadLegalText(resourceName: String) -> String {
-        guard let url = Bundle.main.url(forResource: resourceName, withExtension: "txt", subdirectory: "Legal")
+        let localizedResourceName = L10n.legalResourceName(resourceName)
+        guard let url = Bundle.main.url(forResource: localizedResourceName, withExtension: "txt", subdirectory: "Legal")
+            ?? Bundle.main.url(forResource: localizedResourceName, withExtension: "txt")
+            ?? Bundle.main.url(forResource: resourceName, withExtension: "txt", subdirectory: "Legal")
             ?? Bundle.main.url(forResource: resourceName, withExtension: "txt"),
               let text = try? String(contentsOf: url, encoding: .utf8) else {
             return ""

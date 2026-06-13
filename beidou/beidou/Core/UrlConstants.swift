@@ -22,7 +22,4 @@ enum UrlConstants {
 
     /// 用户反馈页面
     static let feedback = "http://cjym123.cn/h5/feedback.html"
-
-    /// 地铁图 (高德地图地铁图网页版，对应 Android JsActivity 本地 metro.html)
-    static let metroMap = "https://map.amap.com/subway/index.html"
 }

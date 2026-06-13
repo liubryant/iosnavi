@@ -47,6 +47,20 @@ final class PangleSplashAdManager: NSObject {
         loadAndShowSplashAd(slotID: Self.defaultSplashSlotID, completion: completion)
     }
 
+    func resetSplashRequestState() {
+        didRequestSplashThisSession = false
+    }
+
+    func cancelSplashAd() {
+        isLoading = false
+        completionHandler = nil
+        onClose = nil
+        #if canImport(BUAdSDK)
+        splashAd?.mediation?.destoryAd()
+        splashAd = nil
+        #endif
+    }
+
     /// 加载并展示开屏广告
     /// - Parameters:
     ///   - slotID: 广告位ID
@@ -58,6 +72,10 @@ final class PangleSplashAdManager: NSObject {
         completion: ((Bool, Error?) -> Void)? = nil
     ) {
         #if canImport(BUAdSDK)
+        guard SpUtil.bool(.agreementAccepted) else {
+            completion?(false, nil)
+            return
+        }
         guard shouldRequestSplashThisSession else {
             completion?(false, nil)
             return
@@ -68,16 +86,24 @@ final class PangleSplashAdManager: NSObject {
             return
         }
 
-        didRequestSplashThisSession = true
-
         guard PangleAdManager.shared.isSDKInitialized() else {
-            let error = NSError(domain: "PangleSplashAdManager", code: -1,
-                                 userInfo: [NSLocalizedDescriptionKey: "SDK未初始化，请先初始化SDK"])
-            completion?(false, error)
+            PangleAdManager.shared.initialize { [weak self] success in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    if success {
+                        self.loadAndShowSplashAd(slotID: slotID, tolerateTimeout: tolerateTimeout, completion: completion)
+                    } else {
+                        let error = NSError(domain: "PangleSplashAdManager", code: -1,
+                                             userInfo: [NSLocalizedDescriptionKey: "广告SDK初始化失败"])
+                        completion?(false, error)
+                    }
+                }
+            }
             return
         }
 
         guard !isLoading else { return }
+        didRequestSplashThisSession = true
         isLoading = true
         self.completionHandler = completion
 

@@ -32,7 +32,7 @@ final class PanoramaViewController: UIViewController {
             self.longitude = bd09.longitude
         }
         super.init(nibName: nil, bundle: nil)
-        self.title = "全景"
+        self.title = L10n.t("panorama.title")
     }
 
     @available(*, unavailable)
@@ -81,7 +81,7 @@ final class PanoramaViewController: UIViewController {
         configuration.cornerStyle = .capsule
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
         backButton.configuration = configuration
-        backButton.accessibilityLabel = "返回"
+        backButton.accessibilityLabel = L10n.t("common.back")
         backButton.translatesAutoresizingMaskIntoConstraints = false
         backButton.addTarget(self, action: #selector(tapBack), for: .touchUpInside)
 
@@ -131,10 +131,10 @@ final class PanoramaViewController: UIViewController {
         </head>
         <body>
             <div id="pano"></div>
-            <div id="empty-tip">正在加载百度全景...</div>
+            <div id="empty-tip">\(L10n.t("panorama.loading"))</div>
             <script>
                 function showEmpty() {
-                    document.getElementById("empty-tip").innerText = "该位置暂无全景数据";
+                    document.getElementById("empty-tip").innerText = "\(L10n.t("panorama.no_data"))";
                     document.getElementById("empty-tip").style.display = "block";
                 }
 

@@ -30,6 +30,10 @@ final class PangleAdManager {
 
     /// 初始化穿山甲广告SDK (聚合版本)。⚠️ 仅在用户同意隐私政策后调用
     func initialize(completion: ((Bool) -> Void)? = nil) {
+        guard SpUtil.bool(.agreementAccepted) else {
+            completion?(false)
+            return
+        }
         guard !isInitialized else {
             completion?(true)
             return

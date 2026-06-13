@@ -18,7 +18,11 @@ final class FeedbackViewController: UIViewController {
 
     private static let feedbackRecordsKey = "feedback_records"
 
-    private let categoryControl = UISegmentedControl(items: ["功能异常", "定位问题", "体验建议"])
+    private let categoryControl = UISegmentedControl(items: [
+        L10n.t("feedback.category_bug"),
+        L10n.t("feedback.category_location"),
+        L10n.t("feedback.category_suggestion")
+    ])
     private let contentTextView = UITextView()
     private let placeholderLabel = UILabel()
     private let contactField = UITextField()
@@ -26,7 +30,7 @@ final class FeedbackViewController: UIViewController {
 
     override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
         super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
-        self.title = "用户反馈"
+        self.title = L10n.t("feedback.title")
     }
 
     convenience init() {
@@ -77,13 +81,13 @@ final class FeedbackViewController: UIViewController {
         contentTextView.textContainerInset = UIEdgeInsets(top: 12, left: 10, bottom: 12, right: 10)
         contentTextView.translatesAutoresizingMaskIntoConstraints = false
 
-        placeholderLabel.text = "请描述你遇到的问题或建议"
+        placeholderLabel.text = L10n.t("feedback.placeholder")
         placeholderLabel.font = .systemFont(ofSize: 15)
         placeholderLabel.textColor = .placeholderText
         placeholderLabel.translatesAutoresizingMaskIntoConstraints = false
         contentTextView.addSubview(placeholderLabel)
 
-        contactField.placeholder = "手机号/邮箱/微信号（选填）"
+        contactField.placeholder = L10n.t("feedback.contact_placeholder")
         contactField.font = .systemFont(ofSize: 15)
         contactField.backgroundColor = .secondarySystemGroupedBackground
         contactField.layer.cornerRadius = 8
@@ -93,7 +97,7 @@ final class FeedbackViewController: UIViewController {
         contactField.translatesAutoresizingMaskIntoConstraints = false
 
         var config = UIButton.Configuration.filled()
-        config.title = "提交反馈"
+        config.title = L10n.t("feedback.submit")
         config.image = UIImage(systemName: "paperplane.fill")
         config.imagePadding = 8
         config.baseBackgroundColor = .systemBlue
@@ -103,9 +107,9 @@ final class FeedbackViewController: UIViewController {
         submitButton.translatesAutoresizingMaskIntoConstraints = false
         submitButton.addTarget(self, action: #selector(tapSubmit), for: .touchUpInside)
 
-        stack.addArrangedSubview(makeSection(title: "反馈类型", view: categoryControl))
-        stack.addArrangedSubview(makeSection(title: "反馈内容", view: contentTextView))
-        stack.addArrangedSubview(makeSection(title: "联系方式", view: contactField))
+        stack.addArrangedSubview(makeSection(title: L10n.t("feedback.type"), view: categoryControl))
+        stack.addArrangedSubview(makeSection(title: L10n.t("feedback.content"), view: contentTextView))
+        stack.addArrangedSubview(makeSection(title: L10n.t("feedback.contact"), view: contactField))
         stack.addArrangedSubview(makeTipsView())
         stack.addArrangedSubview(submitButton)
 
@@ -145,7 +149,7 @@ final class FeedbackViewController: UIViewController {
 
     private func makeTipsView() -> UIView {
         let label = UILabel()
-        label.text = "我们会优先处理包含具体地点、操作步骤、设备信息的反馈。"
+        label.text = L10n.t("feedback.tips")
         label.font = .systemFont(ofSize: 13)
         label.textColor = .secondaryLabel
         label.numberOfLines = 0
@@ -155,20 +159,20 @@ final class FeedbackViewController: UIViewController {
     @objc private func tapSubmit() {
         let content = contentTextView.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard content.count >= 5 else {
-            showAlert(message: "请至少输入 5 个字的反馈内容")
+            showAlert(message: L10n.t("feedback.too_short"))
             return
         }
 
         saveFeedback(content: content)
         contentTextView.resignFirstResponder()
         contactField.resignFirstResponder()
-        showAlert(message: "反馈已提交，感谢你的建议") { [weak self] in
+        showAlert(message: L10n.t("feedback.submitted")) { [weak self] in
             self?.navigationController?.popViewController(animated: true)
         }
     }
 
     private func saveFeedback(content: String) {
-        let category = categoryControl.titleForSegment(at: categoryControl.selectedSegmentIndex) ?? "功能异常"
+        let category = categoryControl.titleForSegment(at: categoryControl.selectedSegmentIndex) ?? L10n.t("feedback.category_bug")
         let contact = contactField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let record = FeedbackRecord(
             category: category,
@@ -192,7 +196,7 @@ final class FeedbackViewController: UIViewController {
 
     private func showAlert(message: String, completion: (() -> Void)? = nil) {
         let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "确定", style: .default) { _ in
+        alert.addAction(UIAlertAction(title: L10n.t("common.ok"), style: .default) { _ in
             completion?()
         })
         present(alert, animated: true)

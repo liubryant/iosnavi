@@ -1,0 +1,126 @@
+"app.name" = "NaviBeidou";
+"common.ok" = "OK";
+"common.cancel" = "Cancel";
+"common.close" = "Close";
+"common.my_location" = "My Location";
+"common.current_location" = "Current Location";
+"common.back" = "Back";
+"city.beijing" = "Beijing";
+
+"legal.user_agreement" = "User Agreement";
+"legal.privacy_policy" = "Privacy Policy";
+"legal.service_agreement" = "Service Agreement";
+"agreement.checkbox" = "I have read and agree to the User Agreement and Privacy Policy";
+"agreement.agree_continue" = "Agree and Continue";
+"agreement.disagree" = "Disagree";
+"agreement.must_check" = "Please read and check the User Agreement and Privacy Policy first.";
+"agreement.tip_title" = "Notice";
+"agreement.must_agree" = "You need to agree to the User Agreement and Privacy Policy before using %@.";
+"agreement.view" = "View Agreement";
+"agreement.exit_app" = "Exit App";
+
+"home.search_placeholder" = "Enter destination";
+"home.cloud_panorama" = "720 Cloud";
+"home.bottom_label" = "Satellite Navigation System";
+"home.coordinate_format" = "%@\nLatitude: %.6f\nLongitude: %.6f";
+
+"menu.panorama" = "Panorama / Street View";
+"menu.weather" = "Weather";
+"menu.service_agreement" = "Service Agreement";
+"menu.privacy_policy" = "Privacy Policy";
+"menu.feedback" = "Feedback";
+"menu.map_type" = "Map Type";
+"menu.current_location" = "Current Location";
+"menu.satellite_map" = "Satellite";
+"menu.normal_map" = "Standard";
+"menu.traffic_map" = "Traffic";
+
+"route.title" = "Route Planning";
+"route.drive" = "Drive";
+"route.walk" = "Walk";
+"route.ride" = "Ride";
+"route.truck" = "Truck";
+"route.near_panorama" = "Nearby Street View";
+"route.start_navigation" = "Start Navigation";
+"route.original_start" = "Original Start";
+"route.input_destination" = "Enter Destination";
+"route.need_destination" = "Please enter a destination first.";
+
+"search.destination_title" = "Search Destination";
+"search.destination_placeholder" = "Destination name/address";
+"search.no_history" = "No history";
+"search.searching_destination" = "Searching destination...";
+"search.input_destination_hint" = "Enter a destination name or address";
+"search.no_results" = "No results";
+"search.history" = "History";
+
+"around.title" = "Nearby";
+"around.placeholder" = "Search nearby (food/hotel/gas...)";
+"around.searching" = "Searching nearby places...";
+"around.no_results" = "No nearby results";
+"around.wait_reward" = "Results will appear after the rewarded video finishes...";
+"around.reward_name" = "Nearby Search";
+
+"weather.title" = "Weather";
+"weather.forecast_title" = "Forecast";
+"weather.unsupported" = "WeatherKit is not supported on this system";
+"weather.requires_ios16" = "WeatherKit requires iOS 16 or later";
+"weather.no_forecast" = "No forecast data";
+"weather.failed" = "Failed to load weather data";
+"weather.check_capability" = "Please make sure WeatherKit is enabled and network access is allowed";
+"weather.fallback_failed" = "Failed to load backup weather data";
+"weather.weatherkit_error" = "WeatherKit error: %@";
+"weather.amap_error" = "AMap Weather error: %@";
+"weather.wind" = "Wind %@ km/h";
+"weather.humidity" = "Humidity %@%%";
+"weather.updated" = "%@ updated";
+
+"feedback.title" = "Feedback";
+"feedback.category_bug" = "Issue";
+"feedback.category_location" = "Location";
+"feedback.category_suggestion" = "Suggestion";
+"feedback.placeholder" = "Describe the issue or suggestion";
+"feedback.contact_placeholder" = "Phone / Email / WeChat (optional)";
+"feedback.submit" = "Submit Feedback";
+"feedback.type" = "Feedback Type";
+"feedback.content" = "Feedback";
+"feedback.contact" = "Contact";
+"feedback.tips" = "Feedback with a specific place, steps, and device information will be handled first.";
+"feedback.too_short" = "Please enter at least 5 characters.";
+"feedback.submitted" = "Feedback submitted. Thank you.";
+
+"metro.title" = "Metro Map";
+"metro.world_title" = "World Subway Map";
+
+"panorama.title" = "Panorama";
+"panorama.loading" = "Loading Baidu Panorama...";
+"panorama.no_data" = "No panorama data is available for this location";
+"world.title" = "Popular Panoramas";
+"world.search_placeholder" = "Search scenic spots, cities, or provinces";
+"world.empty" = "No matching spots";
+"world.source_title" = "720 Cloud";
+"world.cloud_panorama_title" = "720 Cloud World Scenic Spots";
+"world.coordinate_format" = "Coordinates %.6f, %.6f";
+"world.no_baidu_panorama" = "No Baidu panorama data is available nearby";
+"world.loading" = "Loading Baidu Panorama...";
+"world.category.popular" = "Popular";
+"world.category.north" = "North";
+"world.category.east" = "East";
+"world.category.central" = "Central";
+"world.category.south" = "South";
+"world.category.southwest" = "Southwest";
+"world.category.northwest" = "Northwest";
+"world.category.northeast" = "Northeast";
+"world.scenic_summary" = "Popular scenic area. View entrances, roads, and nearby Baidu panoramas.";
+
+"navi.drive" = "Driving Navigation";
+"navi.walk" = "Walking Navigation";
+"navi.ride" = "Cycling Navigation";
+"navi.truck" = "Truck Navigation";
+"navi.placeholder" = "%@\n(Available after AMapNaviKit is integrated by pod install)";
+"navi.route_failed" = "Route planning failed. Please check the start/end points or network connection.";
+"navi.settings" = "Navigation Settings";
+"navi.close_traffic" = "Hide Live Traffic";
+"navi.open_traffic" = "Show Live Traffic";
+"navi.exit" = "Exit Navigation";
+"navi.arrived" = "You have arrived at your destination";

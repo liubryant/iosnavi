@@ -60,7 +60,7 @@ final class AgreementViewController: UIViewController {
         checkBoxButton.translatesAutoresizingMaskIntoConstraints = false
 
         let checkLabel = UILabel()
-        checkLabel.text = "我已阅读并同意《用户协议》和《隐私政策》"
+        checkLabel.text = L10n.t("agreement.checkbox")
         checkLabel.font = .systemFont(ofSize: 12)
         checkLabel.textColor = .secondaryLabel
         checkLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -74,7 +74,7 @@ final class AgreementViewController: UIViewController {
         checkRow.translatesAutoresizingMaskIntoConstraints = false
 
         let agreeButton = UIButton(type: .system)
-        agreeButton.setTitle("同意并继续", for: .normal)
+        agreeButton.setTitle(L10n.t("agreement.agree_continue"), for: .normal)
         agreeButton.titleLabel?.font = .boldSystemFont(ofSize: 16)
         agreeButton.setTitleColor(.white, for: .normal)
         agreeButton.backgroundColor = .systemBlue
@@ -83,7 +83,7 @@ final class AgreementViewController: UIViewController {
         agreeButton.translatesAutoresizingMaskIntoConstraints = false
 
         let disagreeButton = UIButton(type: .system)
-        disagreeButton.setTitle("不同意", for: .normal)
+        disagreeButton.setTitle(L10n.t("agreement.disagree"), for: .normal)
         disagreeButton.titleLabel?.font = .systemFont(ofSize: 14)
         disagreeButton.setTitleColor(.secondaryLabel, for: .normal)
         disagreeButton.addTarget(self, action: #selector(tapDisagree), for: .touchUpInside)
@@ -127,10 +127,10 @@ final class AgreementViewController: UIViewController {
             .foregroundColor: UIColor.label
         ], range: NSRange(location: 0, length: attributed.length))
 
-        if let range = text.range(of: "用户协议") {
+        if let range = text.range(of: L10n.t("legal.user_agreement")) {
             attributed.addAttribute(.link, value: "agreement://user", range: NSRange(range, in: text))
         }
-        if let range = text.range(of: "隐私政策") {
+        if let range = text.range(of: L10n.t("legal.privacy_policy")) {
             attributed.addAttribute(.link, value: "agreement://privacy", range: NSRange(range, in: text))
         }
         return attributed
@@ -143,8 +143,8 @@ final class AgreementViewController: UIViewController {
 
     @objc private func tapAgree() {
         guard isChecked else {
-            let alert = UIAlertController(title: nil, message: "请先阅读并勾选同意《用户协议》和《隐私政策》", preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "好的", style: .default))
+            let alert = UIAlertController(title: nil, message: L10n.t("agreement.must_check"), preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: L10n.t("common.ok"), style: .default))
             present(alert, animated: true)
             return
         }
@@ -153,12 +153,12 @@ final class AgreementViewController: UIViewController {
 
     @objc private func tapDisagree() {
         let alert = UIAlertController(
-            title: "提示",
-            message: "您需要同意《用户协议》和《隐私政策》后才能使用\(Constants.appName)。",
+            title: L10n.t("agreement.tip_title"),
+            message: L10n.f("agreement.must_agree", Constants.appName),
             preferredStyle: .alert
         )
-        alert.addAction(UIAlertAction(title: "查看协议", style: .default))
-        alert.addAction(UIAlertAction(title: "退出App", style: .destructive) { _ in
+        alert.addAction(UIAlertAction(title: L10n.t("agreement.view"), style: .default))
+        alert.addAction(UIAlertAction(title: L10n.t("agreement.exit_app"), style: .destructive) { _ in
             exit(0)
         })
         present(alert, animated: true)
@@ -184,9 +184,9 @@ extension AgreementViewController: UITextViewDelegate {
     func textView(_ textView: UITextView, shouldInteractWith URL: URL, in characterRange: NSRange, interaction: UITextItemInteraction) -> Bool {
         switch URL.absoluteString {
         case "agreement://user":
-            presentLegalDoc(title: "用户协议", resourceName: "user_agreement")
+            presentLegalDoc(title: L10n.t("legal.user_agreement"), resourceName: "user_agreement")
         case "agreement://privacy":
-            presentLegalDoc(title: "隐私政策", resourceName: "privacy_policy")
+            presentLegalDoc(title: L10n.t("legal.privacy_policy"), resourceName: "privacy_policy")
         default:
             break
         }

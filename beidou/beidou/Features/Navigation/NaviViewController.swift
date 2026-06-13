@@ -31,10 +31,10 @@ enum NaviMode {
 
     var displayName: String {
         switch self {
-        case .drive: return "驾车导航"
-        case .walk: return "步行导航"
-        case .ride: return "骑行导航"
-        case .truck: return "货车导航"
+        case .drive: return L10n.t("navi.drive")
+        case .walk: return L10n.t("navi.walk")
+        case .ride: return L10n.t("navi.ride")
+        case .truck: return L10n.t("navi.truck")
         }
     }
 }
@@ -143,7 +143,7 @@ final class NaviViewController: UIViewController {
         }
         #else
         let label = UILabel()
-        label.text = "\(mode.displayName)\n(pod install 接入 AMapNaviKit 后生效)"
+        label.text = L10n.f("navi.placeholder", mode.displayName)
         label.numberOfLines = 0
         label.textAlignment = .center
         label.textColor = .white
@@ -259,29 +259,29 @@ final class NaviViewController: UIViewController {
     }
 
     fileprivate func showRouteFailureAlert() {
-        let alert = UIAlertController(title: nil, message: "路线规划失败，请检查起终点或网络连接", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "确定", style: .default) { [weak self] _ in
+        let alert = UIAlertController(title: nil, message: L10n.t("navi.route_failed"), preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: L10n.t("common.ok"), style: .default) { [weak self] _ in
             self?.tapClose()
         })
         present(alert, animated: true)
     }
 
     fileprivate func showNaviSettings() {
-        let alert = UIAlertController(title: "导航设置", message: nil, preferredStyle: .actionSheet)
+        let alert = UIAlertController(title: L10n.t("navi.settings"), message: nil, preferredStyle: .actionSheet)
 
         #if canImport(AMapNaviKit)
         if let driveView {
-            let trafficTitle = driveView.mapShowTraffic ? "关闭实时路况" : "打开实时路况"
+            let trafficTitle = driveView.mapShowTraffic ? L10n.t("navi.close_traffic") : L10n.t("navi.open_traffic")
             alert.addAction(UIAlertAction(title: trafficTitle, style: .default) { _ in
                 driveView.mapShowTraffic.toggle()
             })
         }
         #endif
 
-        alert.addAction(UIAlertAction(title: "退出导航", style: .destructive) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: L10n.t("navi.exit"), style: .destructive) { [weak self] _ in
             self?.tapClose()
         })
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: L10n.t("common.cancel"), style: .cancel))
 
         if let popover = alert.popoverPresentationController {
             popover.sourceView = view
@@ -314,7 +314,7 @@ extension NaviViewController: AMapNaviDriveManagerDelegate {
     }
 
     func driveManager(onArrivedDestination driveManager: AMapNaviDriveManager) {
-        TTSController.shared.speak("您已到达目的地")
+        TTSController.shared.speak(L10n.t("navi.arrived"))
     }
 }
 
@@ -345,7 +345,7 @@ extension NaviViewController: AMapNaviWalkManagerDelegate {
     }
 
     func walkManager(onArrivedDestination walkManager: AMapNaviWalkManager) {
-        TTSController.shared.speak("您已到达目的地")
+        TTSController.shared.speak(L10n.t("navi.arrived"))
     }
 }
 
@@ -376,7 +376,7 @@ extension NaviViewController: AMapNaviRideManagerDelegate {
     }
 
     func rideManager(onArrivedDestination rideManager: AMapNaviRideManager) {
-        TTSController.shared.speak("您已到达目的地")
+        TTSController.shared.speak(L10n.t("navi.arrived"))
     }
 }
 

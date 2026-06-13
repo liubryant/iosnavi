@@ -44,6 +44,7 @@ enum PrivacyCompliance {
 
     /// 用户同意隐私政策与用户协议后调用，开启地图/定位/搜索 SDK 的合规开关
     static func agreeAll() {
+        guard SpUtil.bool(.agreementAccepted) else { return }
         agreeAMap()
         agreeBaidu()
     }

@@ -21,6 +21,7 @@ final class PoiAroundSearchViewController: UIViewController {
 
     private let location: CurrentLocation?
 
+    private let backButton = UIButton(type: .system)
     private let searchBar = UISearchBar()
     #if canImport(AMapNaviKit)
     private let mapView = MAMapView()
@@ -32,6 +33,7 @@ final class PoiAroundSearchViewController: UIViewController {
     private var results: [SelectedPOI] = []
     private var searchWorkItem: DispatchWorkItem?
     private var latestKeyword = ""
+    private var isWaitingForRewardAd = false
 
     #if canImport(AMapSearchKit)
     private let searchAPI = AMapSearchAPI()
@@ -40,7 +42,7 @@ final class PoiAroundSearchViewController: UIViewController {
     init(location: CurrentLocation? = nil) {
         self.location = location
         super.init(nibName: nil, bundle: nil)
-        self.title = "周边"
+        self.title = L10n.t("around.title")
         #if canImport(AMapSearchKit)
         searchAPI?.delegate = self
         #endif
@@ -55,8 +57,12 @@ final class PoiAroundSearchViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
 
-        searchBar.placeholder = "搜索周边 (餐饮/酒店/加油站...)"
+        setupBackButton()
+
+        searchBar.placeholder = L10n.t("around.placeholder")
         searchBar.delegate = self
+        searchBar.searchBarStyle = .minimal
+        searchBar.backgroundImage = UIImage()
         searchBar.translatesAutoresizingMaskIntoConstraints = false
 
         setupMapPreview()
@@ -67,7 +73,7 @@ final class PoiAroundSearchViewController: UIViewController {
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "poi")
         tableView.keyboardDismissMode = .onDrag
 
-        statusLabel.text = "正在搜索附近地点..."
+        statusLabel.text = L10n.t("around.searching")
         statusLabel.textColor = .secondaryLabel
         statusLabel.font = .systemFont(ofSize: 14)
         statusLabel.textAlignment = .center
@@ -78,9 +84,10 @@ final class PoiAroundSearchViewController: UIViewController {
         view.addSubview(tableView)
         view.addSubview(statusLabel)
         NSLayoutConstraint.activate([
-            searchBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            searchBar.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
+            searchBar.leadingAnchor.constraint(equalTo: backButton.trailingAnchor, constant: 8),
             searchBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            searchBar.heightAnchor.constraint(equalToConstant: 42),
 
             mapView.topAnchor.constraint(equalTo: searchBar.bottomAnchor),
             mapView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -99,6 +106,27 @@ final class PoiAroundSearchViewController: UIViewController {
         ])
 
         performSearch(keyword: "")
+    }
+
+    private func setupBackButton() {
+        var configuration = UIButton.Configuration.filled()
+        configuration.image = UIImage(systemName: "chevron.left")
+        configuration.baseForegroundColor = .white
+        configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.52)
+        configuration.cornerStyle = .capsule
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
+        backButton.configuration = configuration
+        backButton.accessibilityLabel = L10n.t("common.back")
+        backButton.translatesAutoresizingMaskIntoConstraints = false
+        backButton.addTarget(self, action: #selector(tapBack), for: .touchUpInside)
+
+        view.addSubview(backButton)
+        NSLayoutConstraint.activate([
+            backButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            backButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            backButton.widthAnchor.constraint(equalToConstant: 42),
+            backButton.heightAnchor.constraint(equalToConstant: 42)
+        ])
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -135,7 +163,7 @@ final class PoiAroundSearchViewController: UIViewController {
         #else
         mapView.backgroundColor = .systemGray5
         let label = UILabel()
-        label.text = "当前位置"
+        label.text = L10n.t("common.current_location")
         label.font = .systemFont(ofSize: 16, weight: .semibold)
         label.textColor = .secondaryLabel
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -150,17 +178,17 @@ final class PoiAroundSearchViewController: UIViewController {
     /// 当前位置 (GCJ02)，无定位时退化为默认起点
     private func currentLocationPOI() -> SelectedPOI {
         if let location = location {
-            return SelectedPOI(name: "我的位置", address: location.address, latitude: location.latitude, longitude: location.longitude)
+            return SelectedPOI(name: L10n.t("common.my_location"), address: location.address, latitude: location.latitude, longitude: location.longitude)
         }
         if let cached = LocationManager.shared.lastKnownLocation {
-            return SelectedPOI(name: "我的位置", address: cached.address, latitude: cached.latitude, longitude: cached.longitude)
+            return SelectedPOI(name: L10n.t("common.my_location"), address: cached.address, latitude: cached.latitude, longitude: cached.longitude)
         }
-        return SelectedPOI(name: "我的位置", address: "", latitude: Constants.defaultStartLat, longitude: Constants.defaultStartLon)
+        return SelectedPOI(name: L10n.t("common.my_location"), address: "", latitude: Constants.defaultStartLat, longitude: Constants.defaultStartLon)
     }
 
     private func performSearch(keyword: String) {
         latestKeyword = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
-        statusLabel.text = "正在搜索附近地点..."
+        statusLabel.text = L10n.t("around.searching")
         statusLabel.isHidden = false
 
         let center = currentLocationPOI()
@@ -189,8 +217,23 @@ final class PoiAroundSearchViewController: UIViewController {
     private func applyResults(_ pois: [SelectedPOI]) {
         results = pois
         tableView.reloadData()
-        statusLabel.text = pois.isEmpty ? "暂无周边搜索结果" : nil
+        statusLabel.text = pois.isEmpty ? L10n.t("around.no_results") : nil
         statusLabel.isHidden = !pois.isEmpty
+    }
+
+    private func runAfterRewardAd(_ action: @escaping () -> Void) {
+        guard !isWaitingForRewardAd else { return }
+        isWaitingForRewardAd = true
+        PangleRewardAdManager.shared.showRewardAd(in: self) { [weak self] didComplete in
+            guard let self else { return }
+            self.isWaitingForRewardAd = false
+            if didComplete {
+                action()
+            } else {
+                self.statusLabel.text = self.results.isEmpty ? L10n.t("around.no_results") : nil
+                self.statusLabel.isHidden = !self.results.isEmpty
+            }
+        }
     }
 
     private func distanceText(to poi: SelectedPOI) -> String {
@@ -202,6 +245,10 @@ final class PoiAroundSearchViewController: UIViewController {
             return String(format: "%.1fkm", meters / 1000)
         }
         return String(format: "%.0fm", meters)
+    }
+
+    @objc private func tapBack() {
+        navigationController?.popViewController(animated: true)
     }
 }
 
@@ -256,16 +303,18 @@ extension PoiAroundSearchViewController: MAMapViewDelegate {
 extension PoiAroundSearchViewController: UISearchBarDelegate {
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
         searchWorkItem?.cancel()
-        let workItem = DispatchWorkItem { [weak self] in
-            self?.performSearch(keyword: searchText)
-        }
-        searchWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: workItem)
+        latestKeyword = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
         searchBar.resignFirstResponder()
-        performSearch(keyword: searchBar.text ?? "")
+        searchWorkItem?.cancel()
+        let keyword = searchBar.text ?? ""
+        statusLabel.text = L10n.t("around.wait_reward")
+        statusLabel.isHidden = false
+        runAfterRewardAd { [weak self] in
+            self?.performSearch(keyword: keyword)
+        }
     }
 }
 
@@ -291,9 +340,12 @@ extension PoiAroundSearchViewController: UITableViewDataSource, UITableViewDeleg
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         let poi = results[indexPath.row]
-        navigationController?.pushViewController(
-            NaviViewController(start: currentLocationPOI(), end: poi, mode: .drive),
-            animated: true
-        )
+        let start = currentLocationPOI()
+        runAfterRewardAd { [weak self] in
+            self?.navigationController?.pushViewController(
+                NaviViewController(start: start, end: poi, mode: .drive),
+                animated: true
+            )
+        }
     }
 }

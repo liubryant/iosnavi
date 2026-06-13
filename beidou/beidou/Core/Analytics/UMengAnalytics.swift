@@ -27,6 +27,7 @@ final class UMengAnalytics {
 
     /// 初始化友盟统计 (⚠️ 仅在用户同意隐私政策后调用)
     func initialize() {
+        guard SpUtil.bool(.agreementAccepted) else { return }
         guard !isInitialized else { return }
 
         #if canImport(UMCommon)
@@ -45,6 +46,8 @@ final class UMengAnalytics {
 
     /// 记录事件
     func logEvent(_ eventId: String, attributes: [String: Any]? = nil) {
+        guard SpUtil.bool(.agreementAccepted), isInitialized else { return }
+
         #if canImport(UMCommon)
         if let attributes {
             MobClick.event(eventId, attributes: attributes)
@@ -56,6 +59,8 @@ final class UMengAnalytics {
 
     /// 页面开始统计
     func pageBegin(_ pageName: String) {
+        guard SpUtil.bool(.agreementAccepted), isInitialized else { return }
+
         #if canImport(UMCommon)
         MobClick.beginLogPageView(pageName)
         #endif
@@ -63,6 +68,8 @@ final class UMengAnalytics {
 
     /// 页面结束统计
     func pageEnd(_ pageName: String) {
+        guard SpUtil.bool(.agreementAccepted), isInitialized else { return }
+
         #if canImport(UMCommon)
         MobClick.endLogPageView(pageName)
         #endif

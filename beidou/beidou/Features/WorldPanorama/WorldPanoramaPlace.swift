@@ -21,6 +21,28 @@ struct WorldPanoramaPlace {
         "\(name) \(region) \(country) \(summary)".lowercased()
     }
 
+    var localizedRegion: String {
+        switch region {
+        case "热门": return L10n.t("world.category.popular")
+        case "华北": return L10n.t("world.category.north")
+        case "华东": return L10n.t("world.category.east")
+        case "华中": return L10n.t("world.category.central")
+        case "华南": return L10n.t("world.category.south")
+        case "西南": return L10n.t("world.category.southwest")
+        case "西北": return L10n.t("world.category.northwest")
+        case "东北": return L10n.t("world.category.northeast")
+        default: return region
+        }
+    }
+
+    var localizedCountry: String {
+        "\(localizedRegion) · \(name)"
+    }
+
+    var localizedSummary: String {
+        L10n.t("world.scenic_summary")
+    }
+
     static let categories = ["热门", "华北", "华东", "华中", "华南", "西南", "西北", "东北"]
 
     static let thumbnailURL = URL(string: "http://dimg02.c-ctrip.com/images/tg/726/539/317/8e9d61e440264196833846d115c43dc8_C_186_105.jpg")!
@@ -135,7 +157,7 @@ struct WorldPanoramaPlace {
                 name: name,
                 region: region,
                 country: "\(region) · \(name)",
-                summary: "国内热门景区，可查看景区入口、道路与周边百度全景。",
+                summary: L10n.t("world.scenic_summary"),
                 latitude: center.0 + offset,
                 longitude: center.1 + offset,
                 imageURL: thumbnailURL,

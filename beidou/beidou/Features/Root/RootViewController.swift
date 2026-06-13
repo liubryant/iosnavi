@@ -11,11 +11,31 @@ import UIKit
 final class RootViewController: UIViewController {
 
     private var currentChild: UIViewController?
+    private var didStartSplashFlow = false
+    private var didStartInitialFlow = false
+    private var backgroundEnteredAt: Date?
+    private var isShowingHotSplash = false
+
+    private let hotSplashMinimumBackgroundInterval: TimeInterval = 60
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .white
+        observeAppLifecycle()
+    }
 
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        startInitialFlowIfNeeded()
+    }
+
+    private func startInitialFlowIfNeeded() {
+        guard !didStartInitialFlow else { return }
+        didStartInitialFlow = true
         if SpUtil.bool(.agreementAccepted) {
             initializeSDKsAndShowSplash()
         } else {
@@ -39,11 +59,49 @@ final class RootViewController: UIViewController {
     private func initializeSDKsAndShowSplash() {
         PrivacyCompliance.agreeAll()
         UMengAnalytics.shared.initialize()
+
+        didStartSplashFlow = false
         PangleAdManager.shared.initialize { [weak self] _ in
             DispatchQueue.main.async {
-                self?.showSplash()
+                self?.showSplashIfNeeded()
             }
         }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            self?.showSplashIfNeeded()
+        }
+    }
+
+    private func observeAppLifecycle() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+    }
+
+    @objc private func appDidEnterBackground() {
+        backgroundEnteredAt = Date()
+    }
+
+    @objc private func appDidBecomeActive() {
+        guard SpUtil.bool(.agreementAccepted),
+              let backgroundEnteredAt,
+              Date().timeIntervalSince(backgroundEnteredAt) >= hotSplashMinimumBackgroundInterval,
+              !(currentChild is AgreementViewController),
+              !(currentChild is SplashViewController),
+              !isShowingHotSplash else {
+            return
+        }
+        self.backgroundEnteredAt = nil
+        showHotSplash()
     }
 
     // MARK: - 启动页
@@ -51,9 +109,32 @@ final class RootViewController: UIViewController {
     private func showSplash() {
         let vc = SplashViewController()
         vc.onFinish = { [weak self] in
+            self?.isShowingHotSplash = false
             self?.showMain()
         }
         switchTo(vc)
+    }
+
+    private func showHotSplash() {
+        isShowingHotSplash = true
+        didStartSplashFlow = false
+        PangleSplashAdManager.shared.resetSplashRequestState()
+
+        PangleAdManager.shared.initialize { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.showSplashIfNeeded()
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            self?.showSplashIfNeeded()
+        }
+    }
+
+    private func showSplashIfNeeded() {
+        guard !didStartSplashFlow else { return }
+        didStartSplashFlow = true
+        showSplash()
     }
 
     // MARK: - 主页面

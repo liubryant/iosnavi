@@ -156,7 +156,7 @@ final class MapViewController: UIViewController {
         searchIcon.contentMode = .scaleAspectFit
         searchIcon.translatesAutoresizingMaskIntoConstraints = false
 
-        searchLabel.text = "请输入终点"
+        searchLabel.text = L10n.t("home.search_placeholder")
         searchLabel.font = .systemFont(ofSize: 15)
         searchLabel.textColor = .secondaryLabel
         searchLabel.adjustsFontSizeToFitWidth = true
@@ -200,7 +200,7 @@ final class MapViewController: UIViewController {
 
     private func configureCloudPanoramaButton() {
         var configuration = UIButton.Configuration.filled()
-        configuration.title = "720云"
+        configuration.title = L10n.t("home.cloud_panorama")
         configuration.image = UIImage(systemName: "photo")
         configuration.imagePadding = 4
         configuration.cornerStyle = .capsule
@@ -267,7 +267,7 @@ final class MapViewController: UIViewController {
     // MARK: - 底部地图类型标注
 
     private func setupBottomLabel() {
-        bottomLabel.text = "卫星定位导航系统"
+        bottomLabel.text = L10n.t("home.bottom_label")
         bottomLabel.font = .systemFont(ofSize: 12)
         bottomLabel.textColor = UIColor(red: 0.10, green: 0.10, blue: 0.10, alpha: 1)
         bottomLabel.backgroundColor = UIColor.white.withAlphaComponent(0.94)
@@ -340,7 +340,7 @@ final class MapViewController: UIViewController {
     private func displayLocation(for location: CurrentLocation) -> String {
         let address = location.address.isEmpty ? location.city : location.address
         return String(
-            format: "%@\n纬度：%.6f\n经度：%.6f",
+            format: L10n.t("home.coordinate_format"),
             address,
             location.latitude,
             location.longitude
@@ -356,7 +356,7 @@ final class MapViewController: UIViewController {
         }
         let annotation = BMKPointAnnotation()
         annotation.coordinate = bd09
-        annotation.title = "我的位置"
+        annotation.title = L10n.t("common.my_location")
         mapView.addAnnotation(annotation)
         #endif
     }
@@ -390,10 +390,7 @@ final class MapViewController: UIViewController {
     }
 
     @objc private func tapAround() {
-        PangleRewardAdManager.shared.showRewardAd(in: self) { [weak self] in
-            guard let self else { return }
-            self.navigationController?.pushViewController(PoiAroundSearchViewController(location: self.currentLocation), animated: true)
-        }
+        navigationController?.pushViewController(PoiAroundSearchViewController(location: currentLocation), animated: true)
     }
 
     @objc private func tapWeather() {
@@ -428,6 +425,17 @@ final class MapViewController: UIViewController {
         #if canImport(BaiduMapAPI_Map)
         mapView.rotation = 0
         #endif
+        if let currentLocation {
+            centerMap(on: currentLocation)
+            return
+        }
+        if let cached = LocationManager.shared.lastKnownLocation {
+            currentLocation = cached
+            sideMenuVC.updateCurrentLocation(displayLocation(for: cached))
+            centerMap(on: cached)
+            return
+        }
+        refreshLocation()
     }
 }
 
@@ -452,7 +460,7 @@ extension MapViewController: SideMenuViewControllerDelegate {
     func sideMenuDidSelectServiceAgreement(_ menu: SideMenuViewController) {
         sideMenuContainer?.closeMenu()
         navigationController?.pushViewController(
-            WebViewController(title: "服务协议", content: .localText(resourceName: "user_agreement")),
+            WebViewController(title: L10n.t("legal.service_agreement"), content: .localText(resourceName: "user_agreement")),
             animated: true
         )
     }
@@ -460,7 +468,7 @@ extension MapViewController: SideMenuViewControllerDelegate {
     func sideMenuDidSelectPrivacyPolicy(_ menu: SideMenuViewController) {
         sideMenuContainer?.closeMenu()
         navigationController?.pushViewController(
-            WebViewController(title: "隐私政策", content: .localText(resourceName: "privacy_policy")),
+            WebViewController(title: L10n.t("legal.privacy_policy"), content: .localText(resourceName: "privacy_policy")),
             animated: true
         )
     }

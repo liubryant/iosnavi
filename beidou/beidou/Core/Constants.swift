@@ -48,7 +48,7 @@ enum Constants {
     static var adLoadInterval: TimeInterval = 3.0
 
     // MARK: - App信息
-    static let appName = "北斗导航地图"
+    static var appName: String { L10n.appName }
 
     // MARK: - 默认坐标 (对应 BaseActivity 测试用经纬度)
     /// 默认终点: 北京国际文化城附近

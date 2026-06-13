@@ -1,0 +1,5 @@
+"CFBundleDisplayName" = "NaviBeidou";
+"CFBundleName" = "NaviBeidou";
+"NSLocationWhenInUseUsageDescription" = "NaviBeidou needs your location to provide map positioning, route planning, and navigation services.";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "NaviBeidou needs continuous access to your location during navigation to provide real-time route guidance and voice prompts.";
+"NSUserTrackingUsageDescription" = "We need your permission to access the device advertising identifier so we can provide more relevant ads and improve the ad experience.";

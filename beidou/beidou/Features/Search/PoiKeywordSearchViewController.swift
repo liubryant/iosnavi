@@ -22,6 +22,7 @@ final class PoiKeywordSearchViewController: UIViewController {
 
     private let city: String
     private let location: CurrentLocation?
+    private let backButton = UIButton(type: .system)
     private let searchBar = UISearchBar()
     #if canImport(AMapNaviKit)
     private let mapView = MAMapView()
@@ -43,7 +44,7 @@ final class PoiKeywordSearchViewController: UIViewController {
         self.city = city
         self.location = location
         super.init(nibName: nil, bundle: nil)
-        self.title = "搜索目的地"
+        self.title = L10n.t("search.destination_title")
         #if canImport(AMapSearchKit)
         searchAPI?.delegate = self
         #endif
@@ -58,8 +59,12 @@ final class PoiKeywordSearchViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
 
-        searchBar.placeholder = "输入终点名称/地址"
+        setupBackButton()
+
+        searchBar.placeholder = L10n.t("search.destination_placeholder")
         searchBar.delegate = self
+        searchBar.searchBarStyle = .minimal
+        searchBar.backgroundImage = UIImage()
         searchBar.translatesAutoresizingMaskIntoConstraints = false
 
         setupMapPreview()
@@ -70,7 +75,7 @@ final class PoiKeywordSearchViewController: UIViewController {
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "poi")
         tableView.keyboardDismissMode = .onDrag
 
-        statusLabel.text = "暂无历史记录"
+        statusLabel.text = L10n.t("search.no_history")
         statusLabel.textColor = .secondaryLabel
         statusLabel.font = .systemFont(ofSize: 14)
         statusLabel.textAlignment = .center
@@ -81,9 +86,10 @@ final class PoiKeywordSearchViewController: UIViewController {
         view.addSubview(tableView)
         view.addSubview(statusLabel)
         NSLayoutConstraint.activate([
-            searchBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            searchBar.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
+            searchBar.leadingAnchor.constraint(equalTo: backButton.trailingAnchor, constant: 8),
             searchBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            searchBar.heightAnchor.constraint(equalToConstant: 42),
 
             mapView.topAnchor.constraint(equalTo: searchBar.bottomAnchor),
             mapView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -101,6 +107,27 @@ final class PoiKeywordSearchViewController: UIViewController {
             statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: tableView.trailingAnchor, constant: -24)
         ])
         showHistory()
+    }
+
+    private func setupBackButton() {
+        var configuration = UIButton.Configuration.filled()
+        configuration.image = UIImage(systemName: "chevron.left")
+        configuration.baseForegroundColor = .white
+        configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.52)
+        configuration.cornerStyle = .capsule
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
+        backButton.configuration = configuration
+        backButton.accessibilityLabel = L10n.t("common.back")
+        backButton.translatesAutoresizingMaskIntoConstraints = false
+        backButton.addTarget(self, action: #selector(tapBack), for: .touchUpInside)
+
+        view.addSubview(backButton)
+        NSLayoutConstraint.activate([
+            backButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            backButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            backButton.widthAnchor.constraint(equalToConstant: 42),
+            backButton.heightAnchor.constraint(equalToConstant: 42)
+        ])
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -140,7 +167,7 @@ final class PoiKeywordSearchViewController: UIViewController {
         #else
         mapView.backgroundColor = .systemGray5
         let label = UILabel()
-        label.text = "当前位置"
+        label.text = L10n.t("common.current_location")
         label.font = .systemFont(ofSize: 16, weight: .semibold)
         label.textColor = .secondaryLabel
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -154,12 +181,12 @@ final class PoiKeywordSearchViewController: UIViewController {
 
     private func currentLocationPOI() -> SelectedPOI {
         if let location {
-            return SelectedPOI(name: "我的位置", address: location.address, latitude: location.latitude, longitude: location.longitude)
+            return SelectedPOI(name: L10n.t("common.my_location"), address: location.address, latitude: location.latitude, longitude: location.longitude)
         }
         if let cached = LocationManager.shared.lastKnownLocation {
-            return SelectedPOI(name: "我的位置", address: cached.address, latitude: cached.latitude, longitude: cached.longitude)
+            return SelectedPOI(name: L10n.t("common.my_location"), address: cached.address, latitude: cached.latitude, longitude: cached.longitude)
         }
-        return SelectedPOI(name: "我的位置", address: "", latitude: Constants.defaultStartLat, longitude: Constants.defaultStartLon)
+        return SelectedPOI(name: L10n.t("common.my_location"), address: "", latitude: Constants.defaultStartLat, longitude: Constants.defaultStartLon)
     }
 
     private func performSearch(keyword: String) {
@@ -170,7 +197,7 @@ final class PoiKeywordSearchViewController: UIViewController {
             return
         }
         isShowingHistory = false
-        statusLabel.text = "正在搜索目的地..."
+        statusLabel.text = L10n.t("search.searching_destination")
         statusLabel.isHidden = false
 
         #if canImport(AMapSearchKit)
@@ -198,7 +225,7 @@ final class PoiKeywordSearchViewController: UIViewController {
         isShowingHistory = false
         results = pois
         tableView.reloadData()
-        statusLabel.text = pois.isEmpty ? (latestKeyword.isEmpty ? "输入终点名称或地址" : "暂无搜索结果") : nil
+        statusLabel.text = pois.isEmpty ? (latestKeyword.isEmpty ? L10n.t("search.input_destination_hint") : L10n.t("search.no_results")) : nil
         statusLabel.isHidden = !pois.isEmpty
     }
 
@@ -207,8 +234,12 @@ final class PoiKeywordSearchViewController: UIViewController {
         isShowingHistory = true
         results = POIHistoryStore.load()
         tableView.reloadData()
-        statusLabel.text = results.isEmpty ? "暂无历史记录" : nil
+        statusLabel.text = results.isEmpty ? L10n.t("search.no_history") : nil
         statusLabel.isHidden = !results.isEmpty
+    }
+
+    @objc private func tapBack() {
+        navigationController?.popViewController(animated: true)
     }
 }
 
@@ -283,7 +314,7 @@ extension PoiKeywordSearchViewController: UISearchBarDelegate {
 
 extension PoiKeywordSearchViewController: UITableViewDataSource, UITableViewDelegate {
     func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        isShowingHistory && !results.isEmpty ? "历史记录" : nil
+        isShowingHistory && !results.isEmpty ? L10n.t("search.history") : nil
     }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {

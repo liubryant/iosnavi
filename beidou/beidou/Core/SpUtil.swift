@@ -18,6 +18,8 @@ enum SpUtil {
         case lastLongitude = "last_longitude"
         /// 上次定位城市
         case lastCity = "last_city"
+        /// 上次定位行政区划编码
+        case lastAdcode = "last_adcode"
         /// 上次定位地址描述
         case lastAddress = "last_address"
         /// 当前地图类型 (普通图/卫星图/路况图)
