@@ -66,8 +66,6 @@ final class WeatherViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemGroupedBackground
 
-        setupBackButton()
-
         let scrollView = UIScrollView()
         scrollView.translatesAutoresizingMaskIntoConstraints = false
 
@@ -76,23 +74,14 @@ final class WeatherViewController: UIViewController {
         contentStack.spacing = 16
         contentStack.translatesAutoresizingMaskIntoConstraints = false
 
-        cityLabel.font = .boldSystemFont(ofSize: 24)
+        cityLabel.font = .systemFont(ofSize: 20, weight: .semibold)
         cityLabel.textAlignment = .center
         cityLabel.text = location?.city ?? L10n.t("city.beijing")
+        cityLabel.translatesAutoresizingMaskIntoConstraints = false
         topWeatherIconView.contentMode = .scaleAspectFit
         topWeatherIconView.tintColor = .systemOrange
         topWeatherIconView.image = UIImage(systemName: "cloud.sun.fill")
         topWeatherIconView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            topWeatherIconView.widthAnchor.constraint(equalToConstant: 26),
-            topWeatherIconView.heightAnchor.constraint(equalToConstant: 26)
-        ])
-
-        let cityRow = UIStackView(arrangedSubviews: [cityLabel, topWeatherIconView])
-        cityRow.axis = .horizontal
-        cityRow.alignment = .center
-        cityRow.distribution = .equalCentering
-        cityRow.spacing = 8
 
         let weatherRow = UIStackView(arrangedSubviews: [weatherLabel, weatherIconView])
         weatherRow.axis = .horizontal
@@ -135,7 +124,6 @@ final class WeatherViewController: UIViewController {
         activityIndicator.translatesAutoresizingMaskIntoConstraints = false
         activityIndicator.startAnimating()
 
-        contentStack.addArrangedSubview(cityRow)
         contentStack.addArrangedSubview(liveCard)
         contentStack.addArrangedSubview(forecastTitle)
         contentStack.addArrangedSubview(forecastCard)
@@ -161,7 +149,26 @@ final class WeatherViewController: UIViewController {
             activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
 
+        setupBackButton()
+        setupCityHeader()
+
         loadWeather()
+    }
+
+    private func setupCityHeader() {
+        view.addSubview(cityLabel)
+        view.addSubview(topWeatherIconView)
+        NSLayoutConstraint.activate([
+            cityLabel.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
+            cityLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            cityLabel.leadingAnchor.constraint(greaterThanOrEqualTo: backButton.trailingAnchor, constant: 8),
+            cityLabel.trailingAnchor.constraint(lessThanOrEqualTo: topWeatherIconView.leadingAnchor, constant: -8),
+
+            topWeatherIconView.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
+            topWeatherIconView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+            topWeatherIconView.widthAnchor.constraint(equalToConstant: 26),
+            topWeatherIconView.heightAnchor.constraint(equalToConstant: 26)
+        ])
     }
 
     private func setupBackButton() {

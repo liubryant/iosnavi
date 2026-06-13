@@ -66,11 +66,8 @@ final class MetroViewController: UIViewController {
         setupBackButton()
         setupTitleLabel()
 
-        LocationManager.shared.requestLocation { [weak self] location in
-            guard let self, let webView = self.webView else { return }
-            let preferredCityName = location?.city ?? Constants.city
-            webView.loadHTMLString(Self.subwayHTML(preferredCityName: preferredCityName), baseURL: URL(string: "https://api.map.baidu.com"))
-        }
+        let preferredCityName = LocationManager.shared.lastKnownLocation?.city ?? Constants.city
+        webView.loadHTMLString(Self.subwayHTML(preferredCityName: preferredCityName), baseURL: URL(string: "https://api.map.baidu.com"))
     }
 
     private func setupBackButton() {
@@ -148,8 +145,14 @@ final class MetroViewController: UIViewController {
                     color: #fff;
                     font-size: 12px;
                     padding: 0 8px;
+                    text-align: center;
+                    text-align-last: center;
                     -webkit-appearance: none;
                     appearance: none;
+                }
+                #city-picker option {
+                    text-align: center;
+                    color: #000;
                 }
             </style>
             <script src="https://api.map.baidu.com/api?type=subway&v=1.0&ak=\(Constants.baiduMapAPIKey)"></script>

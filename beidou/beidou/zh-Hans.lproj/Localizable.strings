@@ -47,6 +47,7 @@
 "route.need_destination" = "请先输入终点";
 
 "search.destination_title" = "搜索目的地";
+"search.destination_satellite_title" = "卫星定位导航";
 "search.destination_placeholder" = "输入终点名称/地址";
 "search.no_history" = "暂无历史记录";
 "search.searching_destination" = "正在搜索目的地...";
@@ -92,6 +93,7 @@
 "metro.title" = "地铁图";
 "metro.world_title" = "世界地铁线路图";
 "panorama.title" = "全景";
+"panorama.3d_title" = "3D导航街景";
 "panorama.loading" = "正在加载百度全景...";
 "panorama.no_data" = "该位置暂无全景数据";
 "world.title" = "国内热门景区全景";

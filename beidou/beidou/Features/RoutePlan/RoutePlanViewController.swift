@@ -97,6 +97,19 @@ final class RoutePlanViewController: UIViewController {
             button.widthAnchor.constraint(equalToConstant: 42),
             button.heightAnchor.constraint(equalToConstant: 42)
         ])
+
+        let titleLabel = UILabel()
+        titleLabel.text = L10n.t("search.destination_satellite_title")
+        titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
+        titleLabel.textAlignment = .center
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(titleLabel)
+        NSLayoutConstraint.activate([
+            titleLabel.centerYAnchor.constraint(equalTo: button.centerYAnchor),
+            titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            titleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: button.trailingAnchor, constant: 8),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -12)
+        ])
     }
 
     // MARK: - 起终点输入卡片

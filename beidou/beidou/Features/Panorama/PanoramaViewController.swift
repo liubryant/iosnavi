@@ -19,6 +19,7 @@ final class PanoramaViewController: UIViewController {
     private var webView: WKWebView?
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
     private let backButton = UIButton(type: .system)
+    private let titleLabel = UILabel()
 
     init(latitude: Double? = nil, longitude: Double? = nil) {
         if let latitude = latitude, let longitude = longitude {
@@ -59,6 +60,7 @@ final class PanoramaViewController: UIViewController {
         activityIndicator.startAnimating()
 
         setupBackButton()
+        setupTitleLabel()
 
         NSLayoutConstraint.activate([
             webView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -91,6 +93,22 @@ final class PanoramaViewController: UIViewController {
             backButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
             backButton.widthAnchor.constraint(equalToConstant: 42),
             backButton.heightAnchor.constraint(equalToConstant: 42)
+        ])
+    }
+
+    private func setupTitleLabel() {
+        titleLabel.text = L10n.t("panorama.3d_title")
+        titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
+        titleLabel.textColor = .white
+        titleLabel.textAlignment = .center
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        view.addSubview(titleLabel)
+        NSLayoutConstraint.activate([
+            titleLabel.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
+            titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            titleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: backButton.trailingAnchor, constant: 8),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -12)
         ])
     }
 

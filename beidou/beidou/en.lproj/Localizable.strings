@@ -47,6 +47,7 @@
 "route.need_destination" = "Please enter a destination first.";
 
 "search.destination_title" = "Search Destination";
+"search.destination_satellite_title" = "Satellite Navigation";
 "search.destination_placeholder" = "Destination name/address";
 "search.no_history" = "No history";
 "search.searching_destination" = "Searching destination...";
@@ -93,6 +94,7 @@
 "metro.world_title" = "World Subway Map";
 
 "panorama.title" = "Panorama";
+"panorama.3d_title" = "3D Navigation Street View";
 "panorama.loading" = "Loading Baidu Panorama...";
 "panorama.no_data" = "No panorama data is available for this location";
 "world.title" = "Popular Panoramas";
