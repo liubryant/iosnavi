@@ -1,6 +1,7 @@
 //
 //  PangleAdManager.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  穿山甲(GroMore)广告SDK管理类。
 //

@@ -1,6 +1,7 @@
 //
 //  Constants.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  全局常量: 地图SDK Key、广告/统计 占位符ID、业务默认值。
 //  对应 Android 项目 cn.navibeidou.beidou.Util.Constants

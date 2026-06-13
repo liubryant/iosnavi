@@ -1,6 +1,7 @@
 //
 //  PoiAroundSearchViewController.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  周边搜索页 (对应 Android 周边POI列表)。
 //  使用高德 SearchKit 周边搜索接口，列表展示距离当前位置的POI，

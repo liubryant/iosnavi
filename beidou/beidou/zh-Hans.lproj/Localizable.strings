@@ -64,15 +64,10 @@
 
 "weather.title" = "天气查询";
 "weather.forecast_title" = "未来天气预报";
-"weather.unsupported" = "当前系统不支持 WeatherKit";
-"weather.requires_ios16" = "WeatherKit 需要 iOS 16 或更高版本";
 "weather.no_forecast" = "暂无预报数据";
-"weather.failed" = "天气数据获取失败";
-"weather.check_capability" = "请确认已开启 WeatherKit 能力并允许网络访问";
+"weather.check_capability" = "请检查网络连接后重试";
 "weather.fallback_failed" = "备用天气数据获取失败";
-"weather.weatherkit_error" = "WeatherKit 错误：%@";
 "weather.amap_error" = "高德天气错误：%@";
-"weather.wind" = "风速 %@ km/h";
 "weather.humidity" = "湿度 %@%%";
 "weather.updated" = "%@ 更新";
 

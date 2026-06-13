@@ -1,6 +1,7 @@
 //
 //  NaviViewController.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  高德导航页 (对应 Android navi/ 包下 BaseActivity + xxxRouteCalculateActivity)。
 //  按 mode 持有对应的 AMapNaviDriveManager/WalkManager/RideManager + 对应导航视图,

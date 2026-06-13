@@ -1,6 +1,7 @@
 //
 //  TTSController.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  导航语音播报。对应 Android navi/TTSController.java 的队列播报模式
 //  (LinkedList<String> wordList + Handler 轮询)，iOS 用 AVSpeechSynthesizer

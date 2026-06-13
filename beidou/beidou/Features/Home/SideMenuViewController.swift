@@ -1,6 +1,7 @@
 //
 //  SideMenuViewController.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  侧边栏内容。对应 Android left_menu.xml:
 //  头部(图标+名称+版本) / 全景 / 天气 / 服务协议 / 隐私政策 / 用户反馈 /

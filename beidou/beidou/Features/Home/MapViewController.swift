@@ -1,6 +1,7 @@
 //
 //  MapViewController.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  主页地图 (对应 Android MapActivity + fragment_map.xml)。
 //  百度地图全屏展示 + 顶部搜索栏 + 左右悬浮按钮 + 底部地图类型标注。

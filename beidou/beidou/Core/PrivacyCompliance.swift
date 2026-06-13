@@ -1,6 +1,7 @@
 //
 //  PrivacyCompliance.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  地图SDK隐私合规接口。对应 Android IndexActivity.privacyCompliance()
 //  ⚠️ 仅在用户同意《用户协议》和《隐私政策》后调用 agreeAll()。

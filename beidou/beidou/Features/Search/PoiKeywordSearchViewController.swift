@@ -1,6 +1,7 @@
 //
 //  PoiKeywordSearchViewController.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  关键字POI搜索 (对应 Android 路线规划"输入终点"联想)。
 //  使用高德 Web服务 关键字搜索接口，选中后通过 onSelect 回调返回。

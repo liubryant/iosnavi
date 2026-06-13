@@ -1,6 +1,7 @@
 //
 //  PangleRewardAdManager.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  GroMore 激励视频广告管理。
 //

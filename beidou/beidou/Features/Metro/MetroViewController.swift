@@ -1,6 +1,7 @@
 //
 //  MetroViewController.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  地铁图页 (对应 Android JsActivity 加载本地 metro.html)。
 //  iOS 版使用 WKWebView 加载百度地图 JS API 的地铁图组件 (BMapSub.Subway)。
@@ -54,10 +55,10 @@ final class MetroViewController: UIViewController {
         activityIndicator.startAnimating()
 
         NSLayoutConstraint.activate([
-            webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            webView.topAnchor.constraint(equalTo: view.topAnchor),
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            webView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
@@ -94,6 +95,7 @@ final class MetroViewController: UIViewController {
     private func setupTitleLabel() {
         titleLabel.text = L10n.t("metro.world_title")
         titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
+        titleLabel.textColor = .black
         titleLabel.textAlignment = .center
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
@@ -128,13 +130,13 @@ final class MetroViewController: UIViewController {
         <html>
         <head>
             <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
             <style>
                 html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #fff; }
                 #subway-container { width: 100%; height: 100%; }
                 #city-picker {
                     position: absolute;
-                    top: 8px;
+                    top: calc(env(safe-area-inset-top, 0px) + 13px);
                     right: 12px;
                     z-index: 999;
                     height: 32px;

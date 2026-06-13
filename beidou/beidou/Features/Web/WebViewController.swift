@@ -1,6 +1,7 @@
 //
 //  WebViewController.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  通用内容容器: 用于展示《用户协议》《隐私政策》等长文本(对应 Android ProtocolActivity 文本展示部分)
 //  以及通过 WKWebView 加载网页/本地HTML(对应 Android ProtocolActivity WebView 部分 / JsActivity)。

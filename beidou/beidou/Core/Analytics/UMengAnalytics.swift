@@ -1,6 +1,7 @@
 //
 //  UMengAnalytics.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  友盟统计管理类。
 //

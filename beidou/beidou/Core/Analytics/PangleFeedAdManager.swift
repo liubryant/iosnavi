@@ -1,6 +1,7 @@
 //
 //  PangleFeedAdManager.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  穿山甲(GroMore) 插屏/信息流广告管理类。
 //  对应 Android Constants.java 中 adLoadCount(=3)/adLoadInterval(=3000ms) 的

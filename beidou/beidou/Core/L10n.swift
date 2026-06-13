@@ -1,6 +1,7 @@
 //
 //  L10n.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 
 import Foundation

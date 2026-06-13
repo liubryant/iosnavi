@@ -1,6 +1,7 @@
 //
 //  RoutePlanViewController.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  路线规划页 (对应 Android IndexActivity + activity_index.xml)。
 //  起终点输入 + 驾车/步行/骑行/货车 四种出行方式 + 开始导航/附近街景。
@@ -100,7 +101,7 @@ final class RoutePlanViewController: UIViewController {
 
         let titleLabel = UILabel()
         titleLabel.text = L10n.t("search.destination_satellite_title")
-        titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
+        titleLabel.font = .systemFont(ofSize: 16, weight: .regular)
         titleLabel.textAlignment = .center
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(titleLabel)

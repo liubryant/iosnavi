@@ -1,6 +1,7 @@
 //
 //  beidouApp.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  Created by liuzheng on 2026/6/10.
 //

@@ -64,15 +64,10 @@
 
 "weather.title" = "Weather";
 "weather.forecast_title" = "Forecast";
-"weather.unsupported" = "WeatherKit is not supported on this system";
-"weather.requires_ios16" = "WeatherKit requires iOS 16 or later";
 "weather.no_forecast" = "No forecast data";
-"weather.failed" = "Failed to load weather data";
-"weather.check_capability" = "Please make sure WeatherKit is enabled and network access is allowed";
+"weather.check_capability" = "Please check your network connection and try again";
 "weather.fallback_failed" = "Failed to load backup weather data";
-"weather.weatherkit_error" = "WeatherKit error: %@";
 "weather.amap_error" = "AMap Weather error: %@";
-"weather.wind" = "Wind %@ km/h";
 "weather.humidity" = "Humidity %@%%";
 "weather.updated" = "%@ updated";
 

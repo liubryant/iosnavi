@@ -1,6 +1,7 @@
 //
 //  WorldPanoramaDetailViewController.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  国内 5A 景区详情，页面内展示百度全景。
 //

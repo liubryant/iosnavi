@@ -1,17 +1,15 @@
 //
 //  WeatherViewController.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  天气查询页 (对应 Android WeatherSearchActivity)。
-//  使用 WeatherKit 获取当前位置实时天气和预报。
+//  使用高德天气搜索接口获取当前位置实时天气和预报。
 //
 
 import UIKit
 import CoreLocation
 
-#if canImport(WeatherKit)
-import WeatherKit
-#endif
 #if canImport(AMapSearchKit)
 import AMapSearchKit
 #endif
@@ -36,17 +34,10 @@ final class WeatherViewController: UIViewController {
     #if canImport(AMapSearchKit)
     private let searchAPI = AMapSearchAPI()
     private var amapWeatherLocation: CurrentLocation?
-    private var amapWeatherKitError: Error?
     private var amapWeatherCandidates: [String] = []
     private var amapWeatherErrors: [String] = []
     private var activeAmapWeatherCity: String?
     #endif
-    private let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale.current
-        formatter.setLocalizedDateFormatFromTemplate("MMMdE")
-        return formatter
-    }()
 
     init(location: CurrentLocation? = nil) {
         self.location = location
@@ -248,23 +239,14 @@ final class WeatherViewController: UIViewController {
 
     private func loadWeather() {
         let current = currentLocation()
-        if loadAmapSearchKitWeather(location: current) {
-            return
-        }
-        guard #available(iOS 16.0, *) else {
+        if !loadAmapSearchKitWeather(location: current) {
             loadAmapWeatherFallback(location: current)
-            return
-        }
-
-        Task { [weak self] in
-            await self?.loadWeatherKit(location: current)
         }
     }
 
-    private func loadAmapSearchKitWeather(location: CurrentLocation, weatherKitError: Error? = nil) -> Bool {
+    private func loadAmapSearchKitWeather(location: CurrentLocation) -> Bool {
         #if canImport(AMapSearchKit)
         amapWeatherLocation = location
-        amapWeatherKitError = weatherKitError
         amapWeatherCandidates = weatherCityCandidates(for: location)
         amapWeatherErrors = []
         requestNextAmapSearchKitWeatherCandidate()
@@ -280,7 +262,6 @@ final class WeatherViewController: UIViewController {
             if let location = amapWeatherLocation {
                 loadAmapWeatherFallback(
                     location: location,
-                    weatherKitError: amapWeatherKitError,
                     candidates: weatherCityCandidates(for: location),
                     errors: amapWeatherErrors
                 )
@@ -308,25 +289,11 @@ final class WeatherViewController: UIViewController {
     }
     #endif
 
-    @available(iOS 16.0, *)
-    private func loadWeatherKit(location: CurrentLocation) async {
-        let clLocation = CLLocation(latitude: location.latitude, longitude: location.longitude)
-
-        do {
-            let weather = try await WeatherService.shared.weather(for: clLocation)
-            applyWeatherKit(weather, location: location)
-        } catch {
-            if !loadAmapSearchKitWeather(location: location, weatherKitError: error) {
-                loadAmapWeatherFallback(location: location, weatherKitError: error)
-            }
-        }
+    private func loadAmapWeatherFallback(location: CurrentLocation) {
+        loadAmapWeatherFallback(location: location, candidates: weatherCityCandidates(for: location), errors: [])
     }
 
-    private func loadAmapWeatherFallback(location: CurrentLocation, weatherKitError: Error? = nil) {
-        loadAmapWeatherFallback(location: location, weatherKitError: weatherKitError, candidates: weatherCityCandidates(for: location), errors: [])
-    }
-
-    private func loadAmapWeatherFallback(location: CurrentLocation, weatherKitError: Error?, candidates: [String], errors: [String]) {
+    private func loadAmapWeatherFallback(location: CurrentLocation, candidates: [String], errors: [String]) {
         guard let weatherCity = candidates.first else {
             activityIndicator.stopAnimating()
             weatherLabel.text = L10n.t("weather.fallback_failed")
@@ -334,7 +301,7 @@ final class WeatherViewController: UIViewController {
             windLabel.text = L10n.t("weather.check_capability")
             humidityLabel.text = nil
             reportTimeLabel.text = nil
-            showForecastMessage(weatherErrorMessage(weatherKitError: weatherKitError, amapError: errors.joined(separator: "\n")))
+            showForecastMessage(weatherErrorMessage(amapError: errors.joined(separator: "\n")))
             return
         }
 
@@ -350,7 +317,6 @@ final class WeatherViewController: UIViewController {
                 }
                 self.loadAmapWeatherFallback(
                     location: location,
-                    weatherKitError: weatherKitError,
                     candidates: Array(candidates.dropFirst()),
                     errors: nextErrors
                 )
@@ -424,9 +390,8 @@ final class WeatherViewController: UIViewController {
         return "\(cityPrefix)00"
     }
 
-    private func weatherErrorMessage(weatherKitError: Error?, amapError: String?) -> String {
+    private func weatherErrorMessage(amapError: String?) -> String {
         let messages = [
-            weatherKitError.map { L10n.f("weather.weatherkit_error", $0.localizedDescription) },
             amapError.map { L10n.f("weather.amap_error", $0) }
         ].compactMap { $0 }
         return messages.isEmpty ? L10n.t("weather.no_forecast") : messages.joined(separator: "\n")
@@ -538,39 +503,6 @@ final class WeatherViewController: UIViewController {
         )
     }
 
-    @available(iOS 16.0, *)
-    private func applyWeatherKit(_ weather: Weather, location: CurrentLocation) {
-        activityIndicator.stopAnimating()
-        cityLabel.text = location.city
-
-        let current = weather.currentWeather
-        setWeatherText(current.condition.description)
-        temperatureLabel.text = "\(Int(current.temperature.converted(to: .celsius).value.rounded()))°"
-        windLabel.text = L10n.f("weather.wind", "\(Int(current.wind.speed.converted(to: .kilometersPerHour).value.rounded()))")
-        humidityLabel.text = L10n.f("weather.humidity", "\(Int((current.humidity * 100).rounded()))")
-        reportTimeLabel.text = L10n.f("weather.updated", formatReportDate(current.date))
-
-        forecastStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        let dailyForecasts = Array(weather.dailyForecast.forecast.prefix(7))
-        guard !dailyForecasts.isEmpty else {
-            showForecastMessage(L10n.t("weather.no_forecast"))
-            return
-        }
-
-        for (index, day) in dailyForecasts.enumerated() {
-            let row = makeForecastRow(
-                date: dateFormatter.string(from: day.date),
-                weather: day.condition.description,
-                temperature: "\(Int(day.lowTemperature.converted(to: .celsius).value.rounded()))° / \(Int(day.highTemperature.converted(to: .celsius).value.rounded()))°"
-            )
-            forecastStack.addArrangedSubview(row)
-
-            if index < dailyForecasts.count - 1 {
-                forecastStack.addArrangedSubview(makeForecastDivider())
-            }
-        }
-    }
-
     private func makeForecastRow(date: String, weather: String, temperature: String) -> UIView {
         let row = UIStackView()
         row.axis = .horizontal
@@ -613,14 +545,6 @@ final class WeatherViewController: UIViewController {
         label.numberOfLines = 0
         label.textColor = .secondaryLabel
         forecastStack.addArrangedSubview(label)
-    }
-
-    private func formatReportDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale.current
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
     }
 
     @objc private func tapBack() {

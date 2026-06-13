@@ -1,6 +1,7 @@
 //
 //  LocationManager.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  高德定位+逆地理编码封装。对应 Android MapActivity 中 AMapLocationClient +
 //  GeocodeSearch.OnGeocodeSearchListener 的定位/逆地理编码逻辑。

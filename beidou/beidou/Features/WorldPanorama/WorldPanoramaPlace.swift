@@ -1,6 +1,7 @@
 //
 //  WorldPanoramaPlace.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  国内热门景区全景入口数据。
 //

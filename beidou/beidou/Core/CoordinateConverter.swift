@@ -1,6 +1,7 @@
 //
 //  CoordinateConverter.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  GCJ02(高德/国测局坐标系) <-> BD09(百度坐标系) 互转。
 //  首页地图为百度地图，但定位/逆地理编码使用高德 SDK (GCJ02)，

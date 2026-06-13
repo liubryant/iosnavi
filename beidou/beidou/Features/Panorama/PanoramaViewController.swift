@@ -1,6 +1,7 @@
 //
 //  PanoramaViewController.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  全景/街景页 (对应 Android QuanJingActivity 百度全景)。
 //  使用 WKWebView 加载百度地图 JS API 的 Panorama 组件，定位到传入的经纬度(百度BD09坐标系)。
@@ -99,7 +100,7 @@ final class PanoramaViewController: UIViewController {
     private func setupTitleLabel() {
         titleLabel.text = L10n.t("panorama.3d_title")
         titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
-        titleLabel.textColor = .white
+        titleLabel.textColor = .black
         titleLabel.textAlignment = .center
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 

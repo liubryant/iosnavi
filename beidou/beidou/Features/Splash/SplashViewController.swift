@@ -1,6 +1,7 @@
 //
 //  SplashViewController.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  启动页: 展示穿山甲开屏广告(对应 Android SplashActivity loadSplashAd)，
 //  广告关闭/超时/无广告填充时进入主页面。

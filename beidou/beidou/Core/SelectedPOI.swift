@@ -1,6 +1,7 @@
 //
 //  SelectedPOI.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  通用 POI 数据模型 (高德 GCJ02 坐标)。
 //  用于路线规划起终点、POI搜索结果选择、导航参数传递等场景。

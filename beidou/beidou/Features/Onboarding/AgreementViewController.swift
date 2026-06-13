@@ -1,6 +1,7 @@
 //
 //  AgreementViewController.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  首次启动隐私合规弹窗。对应 Android cn.navibeidou.beidou.widget.CommonStartDialog
 //  用户需勾选"已阅读并同意《用户协议》和《隐私政策》"后点击"同意并继续"，

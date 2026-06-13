@@ -1,6 +1,7 @@
 //
 //  SideMenuContainerViewController.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  自定义抽屉容器: 主内容 + 左侧侧边栏，pan手势/点击遮罩开关。
 //  对应 Android fragment_map.xml 中的 DrawerLayout。

@@ -31,20 +31,9 @@
 	</dict>
 	<key>UILaunchScreen</key>
 	<dict/>
-	<key>UIRequiredDeviceCapabilities</key>
-	<array>
-		<string>armv7</string>
-	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-	</array>
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
@@ -52,8 +41,6 @@
 	<!-- 定位权限: 首页定位、路线规划、导航过程中持续定位 -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>卫星导航地图需要获取您的位置信息，以便为您提供地图定位、路线规划与导航服务。</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>卫星导航地图需要在导航过程中持续获取您的位置信息，以便为您提供实时路线引导与语音播报。</string>
 
 	<!-- GroMore(穿山甲) 广告标识符权限 -->
 	<key>NSUserTrackingUsageDescription</key>
@@ -87,13 +74,5 @@
 			</dict>
 		</dict>
 	</dict>
-
-	<!-- 跳转外部地图App查询 -->
-	<key>LSApplicationQueriesSchemes</key>
-	<array>
-		<string>iosamap</string>
-		<string>baidumap</string>
-		<string>weixin</string>
-	</array>
 </dict>
 </plist>

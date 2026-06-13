@@ -1,6 +1,7 @@
 //
 //  PangleSplashAdManager.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  穿山甲(GroMore)开屏广告管理类。对应 Android SplashActivity 的开屏Ad加载逻辑。
 //

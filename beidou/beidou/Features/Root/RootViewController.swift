@@ -1,12 +1,14 @@
 //
 //  RootViewController.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  App根容器: 控制 隐私协议弹窗 → SDK初始化 → 启动页 → 主页面 的流程。
 //  对应 Android SplashActivity.firstRun() + CommonStartDialog 的整体编排。
 //
 
 import UIKit
+import AppTrackingTransparency
 
 final class RootViewController: UIViewController {
 
@@ -60,15 +62,32 @@ final class RootViewController: UIViewController {
         PrivacyCompliance.agreeAll()
         UMengAnalytics.shared.initialize()
 
-        didStartSplashFlow = false
-        PangleAdManager.shared.initialize { [weak self] _ in
-            DispatchQueue.main.async {
+        requestTrackingAuthorizationIfNeeded { [weak self] in
+            guard let self else { return }
+            self.didStartSplashFlow = false
+            PangleAdManager.shared.initialize { _ in
+                DispatchQueue.main.async {
+                    self.showSplashIfNeeded()
+                }
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
                 self?.showSplashIfNeeded()
             }
         }
+    }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-            self?.showSplashIfNeeded()
+    // MARK: - App Tracking Transparency
+
+    /// 在SDK初始化(含穿山甲广告，可能读取IDFA)前请求ATT授权。
+    /// 仅在状态为 .notDetermined 时弹窗，已处理过则直接回调，避免重复弹窗。
+    private func requestTrackingAuthorizationIfNeeded(completion: @escaping () -> Void) {
+        guard ATTrackingManager.trackingAuthorizationStatus == .notDetermined else {
+            completion()
+            return
+        }
+        ATTrackingManager.requestTrackingAuthorization { _ in
+            DispatchQueue.main.async(execute: completion)
         }
     }
 

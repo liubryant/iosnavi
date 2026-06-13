@@ -1,6 +1,7 @@
 //
 //  RemoteImageView.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  简单远程图片视图。
 //

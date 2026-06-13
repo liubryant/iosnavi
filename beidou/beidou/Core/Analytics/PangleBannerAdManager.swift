@@ -1,6 +1,7 @@
 //
 //  PangleBannerAdManager.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  穿山甲(GroMore) Banner/信息流模板广告管理类。
 //  对应 Android MapActivity.loadExpressAd(Constants.BANNER_ID, 300, 250)，

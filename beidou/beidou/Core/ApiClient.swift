@@ -1,6 +1,7 @@
 //
 //  ApiClient.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  URLSession 轻封装。对应 Android 项目中 OkHttp 的简单GET请求工具。
 //

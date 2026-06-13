@@ -1,6 +1,7 @@
 //
 //  FeedbackViewController.swift
 //  beidou
+//  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  原生用户反馈页。
 //
