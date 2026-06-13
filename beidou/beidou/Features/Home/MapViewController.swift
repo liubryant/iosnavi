@@ -469,7 +469,7 @@ extension MapViewController: SideMenuViewControllerDelegate {
     func sideMenuDidSelectPrivacyPolicy(_ menu: SideMenuViewController) {
         sideMenuContainer?.closeMenu()
         navigationController?.pushViewController(
-            WebViewController(title: L10n.t("legal.privacy_policy"), content: .localText(resourceName: "privacy_policy")),
+            WebViewController(title: L10n.t("legal.privacy_policy"), content: .remoteURL(Constants.privacyPolicyURL)),
             animated: true
         )
     }

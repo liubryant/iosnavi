@@ -165,8 +165,8 @@ final class AgreementViewController: UIViewController {
         present(alert, animated: true)
     }
 
-    private func presentLegalDoc(title: String, resourceName: String) {
-        let vc = WebViewController(title: title, content: .localText(resourceName: resourceName))
+    private func presentLegalDoc(title: String, content: WebViewController.Content) {
+        let vc = WebViewController(title: title, content: content)
         let nav = UINavigationController(rootViewController: vc)
         vc.navigationItem.leftBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .close, target: self, action: #selector(dismissLegalDoc)
@@ -185,9 +185,9 @@ extension AgreementViewController: UITextViewDelegate {
     func textView(_ textView: UITextView, shouldInteractWith URL: URL, in characterRange: NSRange, interaction: UITextItemInteraction) -> Bool {
         switch URL.absoluteString {
         case "agreement://user":
-            presentLegalDoc(title: L10n.t("legal.user_agreement"), resourceName: "user_agreement")
+            presentLegalDoc(title: L10n.t("legal.user_agreement"), content: .localText(resourceName: "user_agreement"))
         case "agreement://privacy":
-            presentLegalDoc(title: L10n.t("legal.privacy_policy"), resourceName: "privacy_policy")
+            presentLegalDoc(title: L10n.t("legal.privacy_policy"), content: .remoteURL(Constants.privacyPolicyURL))
         default:
             break
         }

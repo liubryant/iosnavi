@@ -36,6 +36,10 @@ enum Constants {
     static let umengAppKey = "6a29e92bcbfa69595158af33"
     static let umengChannel = "App Store"
 
+    // MARK: - 法律文档
+    /// 隐私政策网页地址
+    static let privacyPolicyURL = URL(string: "https://www.cjym123.cn/privacy_navi.html")!
+
     // MARK: - 业务默认值 (对应 Android Constants.java)
     /// 默认城市
     static var city = "北京"
