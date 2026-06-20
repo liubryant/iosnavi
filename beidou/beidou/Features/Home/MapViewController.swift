@@ -40,6 +40,7 @@ final class MapViewController: UIViewController {
 
     private var currentMapType: MapDisplayType = .satellite
     private var currentLocation: CurrentLocation?
+    private var cloudWelcomeWorkItem: DispatchWorkItem?
 
     init(sideMenuViewController: SideMenuViewController) {
         self.sideMenuVC = sideMenuViewController
@@ -73,11 +74,48 @@ final class MapViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        scheduleCloudPanoramaWelcomeIfNeeded()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        cloudWelcomeWorkItem?.cancel()
+        cloudWelcomeWorkItem = nil
         UMengAnalytics.shared.pageEnd("MapViewController")
+    }
+
+    private func scheduleCloudPanoramaWelcomeIfNeeded(after delay: TimeInterval = 5) {
+        guard !SpUtil.bool(.cloudPanoramaWelcomeShown), cloudWelcomeWorkItem == nil else { return }
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.cloudWelcomeWorkItem = nil
+            guard self.viewIfLoaded?.window != nil,
+                  self.presentedViewController == nil,
+                  self.sideMenuContainer?.isMenuOpen != true else {
+                self.scheduleCloudPanoramaWelcomeIfNeeded(after: 1)
+                return
+            }
+            self.showCloudPanoramaWelcome()
+        }
+        cloudWelcomeWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    private func showCloudPanoramaWelcome() {
+        guard !SpUtil.bool(.cloudPanoramaWelcomeShown) else { return }
+        SpUtil.setBool(true, for: .cloudPanoramaWelcomeShown)
+        let popup = CloudPanoramaWelcomeViewController()
+        popup.onOpenFeatured = { [weak self] in
+            guard let url = URL(string: "https://www.720yun.com/t/7a9jvztkeO5?scene_id=20321714") else { return }
+            self?.navigationController?.pushViewController(
+                CloudPanoramaWebViewController(title: "珠穆朗玛纳木措", url: url),
+                animated: true
+            )
+        }
+        popup.onViewMore = { [weak self] in
+            self?.navigationController?.pushViewController(CloudPanoramaListViewController(), animated: true)
+        }
+        present(popup, animated: true)
     }
 
     // MARK: - 地图
@@ -477,6 +515,32 @@ extension MapViewController: SideMenuViewControllerDelegate {
     func sideMenuDidSelectFeedback(_ menu: SideMenuViewController) {
         sideMenuContainer?.closeMenu()
         navigationController?.pushViewController(FeedbackViewController(), animated: true)
+    }
+
+    func sideMenuDidSelectClearCache(_ menu: SideMenuViewController) {
+        sideMenuContainer?.closeMenu()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.presentClearCacheConfirmation()
+        }
+    }
+
+    private func presentClearCacheConfirmation() {
+        let size = AppCacheManager.formattedApproximateSize
+        let alert = UIAlertController(
+            title: L10n.t("cache.confirm_title"),
+            message: String(format: L10n.t("cache.confirm_message"), size),
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: L10n.t("common.cancel"), style: .cancel))
+        alert.addAction(UIAlertAction(title: L10n.t("cache.clear_action"), style: .destructive) { [weak self] _ in
+            AppCacheManager.clear { [weak self] in
+                guard let self else { return }
+                let result = UIAlertController(title: nil, message: L10n.t("cache.success"), preferredStyle: .alert)
+                result.addAction(UIAlertAction(title: L10n.t("common.ok"), style: .default))
+                self.present(result, animated: true)
+            }
+        })
+        present(alert, animated: true)
     }
 
     func sideMenu(_ menu: SideMenuViewController, didSelectMapType type: MapDisplayType) {

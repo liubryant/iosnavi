@@ -2,6 +2,7 @@
 "common.ok" = "确定";
 "common.cancel" = "取消";
 "common.close" = "关闭";
+"ad.label" = "广告";
 "common.my_location" = "我的位置";
 "common.current_location" = "当前位置";
 "common.back" = "返回";
@@ -29,11 +30,16 @@
 "menu.service_agreement" = "服务协议";
 "menu.privacy_policy" = "隐私政策";
 "menu.feedback" = "用户反馈";
+"menu.clear_cache" = "清除缓存";
 "menu.map_type" = "地图类型";
 "menu.current_location" = "当前位置";
 "menu.satellite_map" = "卫星图";
 "menu.normal_map" = "普通图";
 "menu.traffic_map" = "路况图";
+"cache.confirm_title" = "清除缓存";
+"cache.confirm_message" = "当前可统计缓存约为 %@。清除后不会删除收藏、定位记录或用户设置。";
+"cache.clear_action" = "清除";
+"cache.success" = "缓存已清除";
 
 "route.title" = "路线规划";
 "route.drive" = "驾车";
@@ -96,6 +102,15 @@
 "world.empty" = "未找到相关景点";
 "world.source_title" = "720云";
 "world.cloud_panorama_title" = "720云世界景区";
+"cloud.welcome_title" = "探索720云景区";
+"cloud.welcome_message" = "珠穆朗玛与纳木措等精彩全景内容等你发现，进入720云景区沉浸式看世界。";
+"cloud.welcome_more" = "查看更多内容";
+"cloud.welcome_featured_accessibility" = "打开珠穆朗玛纳木措720全景";
+"cloud.welcome_recommendation" = "功能推荐";
+"cloud.welcome_tap_hint" = "点击图片查看全景";
+"cloud.welcome_source_notice" = "全景内容将从720云网页加载";
+"cloud.search_placeholder" = "搜索世界720全景、导览、景区";
+"cloud.empty" = "未找到相关全景";
 "world.coordinate_format" = "经纬度 %.6f, %.6f";
 "world.no_baidu_panorama" = "该景区附近暂无可用百度全景数据";
 "world.loading" = "正在加载百度全景...";

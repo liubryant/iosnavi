@@ -171,7 +171,6 @@ final class RootViewController: UIViewController {
                 PangleBannerAdManager.shared.loadAd(in: sideMenuVC.bannerContainer, rootViewController: container)
             }
         }
-
         let nav = SwipeBackNavigationController(rootViewController: container)
         nav.setNavigationBarHidden(true, animated: false)
         switchTo(nav)

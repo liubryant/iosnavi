@@ -11,6 +11,14 @@ import WebKit
 
 final class WorldPanoramaListViewController: UIViewController {
 
+    private enum Row {
+        case place(Int)
+        case ad(Int)
+    }
+
+    fileprivate static let placeRowHeight: CGFloat = 104
+    private static let adInterval = 4
+
     private let backButton = UIButton(type: .system)
     private let searchBar = UISearchBar()
     private let categoryScrollView = UIScrollView()
@@ -19,6 +27,7 @@ final class WorldPanoramaListViewController: UIViewController {
     private let emptyLabel = UILabel()
     private var selectedCategory = WorldPanoramaPlace.categories[0]
     private var places = WorldPanoramaPlace.places(in: WorldPanoramaPlace.categories[0])
+    private var rows: [Row] = []
     private var categoryButtons: [UIButton] = []
 
     override func viewDidLoad() {
@@ -77,6 +86,7 @@ final class WorldPanoramaListViewController: UIViewController {
         updateCategoryButtons()
 
         tableView.register(WorldPanoramaPlaceCell.self, forCellReuseIdentifier: WorldPanoramaPlaceCell.reuseIdentifier)
+        tableView.register(WorldPanoramaDrawAdCell.self, forCellReuseIdentifier: WorldPanoramaDrawAdCell.reuseIdentifier)
         tableView.delegate = self
         tableView.dataSource = self
         tableView.keyboardDismissMode = .onDrag
@@ -120,6 +130,7 @@ final class WorldPanoramaListViewController: UIViewController {
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
+        rebuildRows()
     }
 
     private func applySearch(_ text: String) {
@@ -127,7 +138,29 @@ final class WorldPanoramaListViewController: UIViewController {
         let categoryPlaces = WorldPanoramaPlace.places(in: selectedCategory)
         places = query.isEmpty ? categoryPlaces : categoryPlaces.filter { $0.searchText.contains(query) }
         emptyLabel.isHidden = !places.isEmpty
+        rebuildRows()
+    }
+
+    private func rebuildRows() {
+        rows.removeAll(keepingCapacity: true)
+        for index in places.indices {
+            rows.append(.place(index))
+            if (index + 1).isMultiple(of: Self.adInterval) {
+                rows.append(.ad(index / Self.adInterval))
+            }
+        }
         tableView.reloadData()
+    }
+
+    private func removeAdRow(slot: Int) {
+        guard let row = rows.firstIndex(where: {
+            if case .ad(let value) = $0 { return value == slot }
+            return false
+        }) else { return }
+        rows.remove(at: row)
+        tableView.performBatchUpdates {
+            tableView.deleteRows(at: [IndexPath(row: row, section: 0)], with: .fade)
+        }
     }
 
     private static func localizedCategoryTitle(_ category: String) -> String {
@@ -177,22 +210,116 @@ extension WorldPanoramaListViewController: UISearchBarDelegate {
 
 extension WorldPanoramaListViewController: UITableViewDataSource, UITableViewDelegate {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        places.count
+        rows.count
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: WorldPanoramaPlaceCell.reuseIdentifier, for: indexPath) as! WorldPanoramaPlaceCell
-        cell.configure(with: places[indexPath.row])
-        return cell
+        switch rows[indexPath.row] {
+        case .place(let placeIndex):
+            let cell = tableView.dequeueReusableCell(withIdentifier: WorldPanoramaPlaceCell.reuseIdentifier, for: indexPath) as! WorldPanoramaPlaceCell
+            cell.configure(with: places[placeIndex])
+            return cell
+        case .ad(let slot):
+            let cell = tableView.dequeueReusableCell(withIdentifier: WorldPanoramaDrawAdCell.reuseIdentifier, for: indexPath) as! WorldPanoramaDrawAdCell
+            cell.load(slot: slot, rootViewController: self) { [weak self] in
+                self?.removeAdRow(slot: slot)
+            }
+            return cell
+        }
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        navigationController?.pushViewController(WorldPanoramaDetailViewController(place: places[indexPath.row]), animated: true)
+        guard case .place(let placeIndex) = rows[indexPath.row] else { return }
+        navigationController?.pushViewController(WorldPanoramaDetailViewController(place: places[placeIndex]), animated: true)
     }
 
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        104
+        switch rows[indexPath.row] {
+        case .place: return Self.placeRowHeight
+        case .ad: return Self.placeRowHeight * 2
+        }
+    }
+}
+
+private final class WorldPanoramaDrawAdCell: UITableViewCell {
+    static let reuseIdentifier = "WorldPanoramaDrawAdCell"
+
+    private let activity = UIActivityIndicatorView(style: .medium)
+    private var loader: PangleDrawFeedAdLoader?
+    private var loadedSlot: Int?
+    private var failureAction: (() -> Void)?
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        selectionStyle = .none
+        backgroundColor = .black
+        contentView.backgroundColor = .black
+        contentView.clipsToBounds = true
+        activity.color = .white
+        activity.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(activity)
+        NSLayoutConstraint.activate([
+            activity.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            activity.centerYAnchor.constraint(equalTo: contentView.centerYAnchor)
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        loader?.cancel()
+        loader = nil
+        loadedSlot = nil
+        failureAction = nil
+        contentView.subviews.filter { $0 !== activity }.forEach { $0.removeFromSuperview() }
+    }
+
+    func load(slot: Int, rootViewController: UIViewController, onFailure: @escaping () -> Void) {
+        guard loadedSlot != slot else { return }
+        prepareForReuse()
+        loadedSlot = slot
+        failureAction = onFailure
+        activity.startAnimating()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            guard let self, self.loadedSlot == slot, self.activity.isAnimating else { return }
+            self.loader?.cancel()
+            self.finishWithFailure()
+        }
+
+        DispatchQueue.main.async { [weak self, weak rootViewController] in
+            guard let self, let rootViewController,
+                  self.loadedSlot == slot,
+                  self.window != nil,
+                  rootViewController.viewIfLoaded?.window != nil else { return }
+            let loader = PangleDrawFeedAdLoader()
+            self.loader = loader
+            let size = CGSize(
+                width: max(self.contentView.bounds.width, UIScreen.main.bounds.width - 32),
+                height: WorldPanoramaListViewController.placeRowHeight * 2
+            )
+            loader.load(rootViewController: rootViewController, adSize: size) { [weak self] adView in
+                guard let self, self.loadedSlot == slot else { return }
+                self.activity.stopAnimating()
+                guard let adView else {
+                    self.finishWithFailure()
+                    return
+                }
+                adView.frame = self.contentView.bounds
+                adView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                self.contentView.addSubview(adView)
+            }
+        }
+    }
+
+    private func finishWithFailure() {
+        activity.stopAnimating()
+        let action = failureAction
+        failureAction = nil
+        action?()
     }
 }
 
@@ -259,6 +386,7 @@ private final class WorldPanoramaPlaceCell: UITableViewCell {
     }
 }
 
+#if false // Replaced by CloudPanoramaListViewController.swift and bundled 246-item data.
 private struct CloudPanoramaItem {
     let title: String
     let url: URL
@@ -290,7 +418,7 @@ private struct CloudPanoramaItem {
     }
 }
 
-final class CloudPanoramaListViewController: UIViewController {
+private final class LegacyCloudPanoramaListViewController: UIViewController {
 
     private let items: [CloudPanoramaItem] = [
         .init(title: "北京天坛", url: URL(string: "https://www.720yun.com/t/83vkcli708q?scene_id=59434172")!, imageName: "CloudPanorama01"),
@@ -508,8 +636,45 @@ private final class CloudPanoramaThumbnailView: UIImageView {
         fatalError("init(coder:) has not been implemented")
     }
 }
+#endif
 
-private final class CloudPanoramaWebViewController: UIViewController {
+final class CloudPanoramaWebViewController: UIViewController {
+    /// 与 Android CloudWebActivity 保持一致，只处理 720 云页面自身的广告组件。
+    private static let disableAdPopupJavaScript = #"""
+    (function() {
+      function hideAdsWrapper(img) {
+        var target = img, hops = 0;
+        while (target && hops < 10) {
+          if (typeof target.className === 'string' && /ads/i.test(target.className)) {
+            target.style.display = 'none';
+            return;
+          }
+          target = target.parentElement;
+          hops++;
+        }
+        img.style.display = 'none';
+      }
+      function killAd() {
+        var bannerImgs = document.querySelectorAll('img[src*="720static.com/home/"]');
+        for (var i = 0; i < bannerImgs.length; i++) {
+          hideAdsWrapper(bannerImgs[i]);
+        }
+        var candidates = document.querySelectorAll('[style]');
+        for (var j = 0; j < candidates.length; j++) {
+          var el = candidates[j];
+          if (el.style && el.style.zIndex === '10000002') {
+            el.style.display = 'none';
+          }
+        }
+      }
+      if (!window.__cloudAdKillerStarted) {
+        window.__cloudAdKillerStarted = true;
+        setInterval(killAd, 100);
+      }
+      killAd();
+    })();
+    """#
+
     private let pageTitle: String
     private let url: URL
     private let webView: WKWebView
@@ -525,6 +690,13 @@ private final class CloudPanoramaWebViewController: UIViewController {
         if #available(iOS 10.0, *) {
             configuration.mediaTypesRequiringUserActionForPlayback = []
         }
+        configuration.userContentController.addUserScript(
+            WKUserScript(
+                source: Self.disableAdPopupJavaScript,
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: false
+            )
+        )
         self.webView = WKWebView(frame: .zero, configuration: configuration)
 
         super.init(nibName: nil, bundle: nil)
@@ -571,6 +743,7 @@ private final class CloudPanoramaWebViewController: UIViewController {
         webView.backgroundColor = .black
         webView.scrollView.backgroundColor = .black
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+        webView.navigationDelegate = self
         webView.translatesAutoresizingMaskIntoConstraints = false
 
         view.addSubview(webView)
@@ -605,5 +778,11 @@ private final class CloudPanoramaWebViewController: UIViewController {
 
     @objc private func tapBack() {
         navigationController?.popViewController(animated: true)
+    }
+}
+
+extension CloudPanoramaWebViewController: WKNavigationDelegate {
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        webView.evaluateJavaScript(Self.disableAdPopupJavaScript, completionHandler: nil)
     }
 }

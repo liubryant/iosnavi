@@ -2,6 +2,7 @@
 "common.ok" = "OK";
 "common.cancel" = "Cancel";
 "common.close" = "Close";
+"ad.label" = "Ad";
 "common.my_location" = "My Location";
 "common.current_location" = "Current Location";
 "common.back" = "Back";
@@ -29,11 +30,16 @@
 "menu.service_agreement" = "Service Agreement";
 "menu.privacy_policy" = "Privacy Policy";
 "menu.feedback" = "Feedback";
+"menu.clear_cache" = "Clear Cache";
 "menu.map_type" = "Map Type";
 "menu.current_location" = "Current Location";
 "menu.satellite_map" = "Satellite";
 "menu.normal_map" = "Standard";
 "menu.traffic_map" = "Traffic";
+"cache.confirm_title" = "Clear Cache";
+"cache.confirm_message" = "Approximately %@ of measurable cache is stored. Favorites, location history, and settings will not be deleted.";
+"cache.clear_action" = "Clear";
+"cache.success" = "Cache cleared";
 
 "route.title" = "Route Planning";
 "route.drive" = "Drive";
@@ -97,6 +103,15 @@
 "world.empty" = "No matching spots";
 "world.source_title" = "720 Cloud";
 "world.cloud_panorama_title" = "720 Cloud World Scenic Spots";
+"cloud.welcome_title" = "Explore 720° Scenic Views";
+"cloud.welcome_message" = "Discover immersive panoramas of Mount Everest, Namtso Lake, and many more destinations.";
+"cloud.welcome_more" = "View More";
+"cloud.welcome_featured_accessibility" = "Open the Mount Everest and Namtso 720 panorama";
+"cloud.welcome_recommendation" = "Feature";
+"cloud.welcome_tap_hint" = "Tap the image to view";
+"cloud.welcome_source_notice" = "Panorama content loads from the 720yun website";
+"cloud.search_placeholder" = "Search 720 panoramas, tours, and scenic spots";
+"cloud.empty" = "No panoramas found";
 "world.coordinate_format" = "Coordinates %.6f, %.6f";
 "world.no_baidu_panorama" = "No Baidu panorama data is available nearby";
 "world.loading" = "Loading Baidu Panorama...";

@@ -29,6 +29,8 @@ enum SpUtil {
         case trafficEnabled = "traffic_enabled"
         /// 上次广告加载时间戳
         case lastAdLoadTime = "last_ad_load_time"
+        /// 首次进入首页的 720 云景推荐弹窗是否已展示
+        case cloudPanoramaWelcomeShown = "cloud_panorama_welcome_shown"
     }
 
     private static let defaults = UserDefaults.standard

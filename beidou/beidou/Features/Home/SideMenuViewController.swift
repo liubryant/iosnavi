@@ -23,6 +23,7 @@ protocol SideMenuViewControllerDelegate: AnyObject {
     func sideMenuDidSelectServiceAgreement(_ menu: SideMenuViewController)
     func sideMenuDidSelectPrivacyPolicy(_ menu: SideMenuViewController)
     func sideMenuDidSelectFeedback(_ menu: SideMenuViewController)
+    func sideMenuDidSelectClearCache(_ menu: SideMenuViewController)
     func sideMenu(_ menu: SideMenuViewController, didSelectMapType type: MapDisplayType)
 }
 
@@ -73,6 +74,8 @@ final class SideMenuViewController: UIViewController {
         stack.addArrangedSubview(buildRow(icon: "hand.raised", title: L10n.t("menu.privacy_policy"), action: #selector(tapPrivacyPolicy)))
         stack.addArrangedSubview(buildDivider())
         stack.addArrangedSubview(buildRow(icon: "envelope", title: L10n.t("menu.feedback"), action: #selector(tapFeedback)))
+        stack.addArrangedSubview(buildDivider())
+        stack.addArrangedSubview(buildRow(icon: "trash", title: L10n.t("menu.clear_cache"), action: #selector(tapClearCache)))
         stack.addArrangedSubview(buildDivider())
         stack.addArrangedSubview(buildRow(icon: "map", title: L10n.t("menu.map_type"), action: nil))
         stack.addArrangedSubview(buildMapTypeSelector())
@@ -275,6 +278,7 @@ final class SideMenuViewController: UIViewController {
     @objc private func tapServiceAgreement() { delegate?.sideMenuDidSelectServiceAgreement(self) }
     @objc private func tapPrivacyPolicy() { delegate?.sideMenuDidSelectPrivacyPolicy(self) }
     @objc private func tapFeedback() { delegate?.sideMenuDidSelectFeedback(self) }
+    @objc private func tapClearCache() { delegate?.sideMenuDidSelectClearCache(self) }
     @objc private func tapSatellite() { delegate?.sideMenu(self, didSelectMapType: .satellite) }
     @objc private func tapNormal() { delegate?.sideMenu(self, didSelectMapType: .normal) }
     @objc private func tapTraffic() { delegate?.sideMenu(self, didSelectMapType: .traffic) }

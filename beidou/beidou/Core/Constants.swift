@@ -27,6 +27,8 @@ enum Constants {
     static let openID = "104126678"
     /// 信息流广告位ID: iosnavi信息流
     static let streamID = "104127544"
+    /// 720云景 Draw 信息流广告位ID（GroMore 原生自渲染）
+    static let cloudPanoramaDrawID = "104149710"
     /// Banner广告位ID: iosnavibanner
     static let bannerID = "104128385"
     /// 激励视频广告位ID: iosnavi激励
