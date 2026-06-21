@@ -30,6 +30,7 @@
 "menu.service_agreement" = "Service Agreement";
 "menu.privacy_policy" = "Privacy Policy";
 "menu.feedback" = "Feedback";
+"menu.rating" = "Rate App";
 "menu.clear_cache" = "Clear Cache";
 "menu.map_type" = "Map Type";
 "menu.current_location" = "Current Location";

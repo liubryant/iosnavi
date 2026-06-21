@@ -42,6 +42,14 @@ enum Constants {
     /// 隐私政策网页地址
     static let privacyPolicyURL = URL(string: "https://www.cjym123.cn/privacy_navi.html")!
 
+    // MARK: - App Store
+    /// App Store 数字ID (App Apple ID，来自 App Store Connect)
+    static let appStoreID = "6779693649"
+    /// App Store 评分/写评论页面跳转链接，仅用于用户主动点击的手动评分入口
+    static var appStoreReviewURL: URL? {
+        URL(string: "itms-apps://itunes.apple.com/app/id\(appStoreID)?action=write-review")
+    }
+
     // MARK: - 业务默认值 (对应 Android Constants.java)
     /// 默认城市
     static var city = "北京"

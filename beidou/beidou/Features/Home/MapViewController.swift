@@ -75,6 +75,7 @@ final class MapViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         scheduleCloudPanoramaWelcomeIfNeeded()
+        ReviewPromptManager.requestSystemReviewIfEligibleAfterCloudScenes(in: self)
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -515,6 +516,11 @@ extension MapViewController: SideMenuViewControllerDelegate {
     func sideMenuDidSelectFeedback(_ menu: SideMenuViewController) {
         sideMenuContainer?.closeMenu()
         navigationController?.pushViewController(FeedbackViewController(), animated: true)
+    }
+
+    func sideMenuDidSelectRating(_ menu: SideMenuViewController) {
+        sideMenuContainer?.closeMenu()
+        ReviewPromptManager.openAppStoreReviewPage()
     }
 
     func sideMenuDidSelectClearCache(_ menu: SideMenuViewController) {

@@ -31,6 +31,10 @@ enum SpUtil {
         case lastAdLoadTime = "last_ad_load_time"
         /// 首次进入首页的 720 云景推荐弹窗是否已展示
         case cloudPanoramaWelcomeShown = "cloud_panorama_welcome_shown"
+        /// 已浏览过的720云景区场景标识(场景URL)列表，用于判断是否达到评分提示阈值
+        case viewedCloudPanoramaSceneIDs = "viewed_cloud_panorama_scene_ids"
+        /// 浏览满2个720云景区后，是否已触发过系统评分提示(只触发一次，避免频繁请求)
+        case reviewPromptedAfterCloudScenes = "review_prompted_after_cloud_scenes"
     }
 
     private static let defaults = UserDefaults.standard
@@ -64,6 +68,14 @@ enum SpUtil {
     }
 
     static func setInteger(_ value: Int, for key: Key) {
+        defaults.set(value, forKey: key.rawValue)
+    }
+
+    static func stringArray(_ key: Key) -> [String] {
+        defaults.stringArray(forKey: key.rawValue) ?? []
+    }
+
+    static func setStringArray(_ value: [String], for key: Key) {
         defaults.set(value, forKey: key.rawValue)
     }
 }

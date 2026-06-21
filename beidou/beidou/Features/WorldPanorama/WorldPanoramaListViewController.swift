@@ -736,6 +736,7 @@ final class CloudPanoramaWebViewController: UIViewController {
         super.viewWillDisappear(animated)
         navigationController?.setNavigationBarHidden(previousNavigationBarHidden, animated: animated)
         UMengAnalytics.shared.pageEnd(pageTitle)
+        ReviewPromptManager.recordCloudPanoramaSceneViewed(url: url)
     }
 
     private func setupWebView() {

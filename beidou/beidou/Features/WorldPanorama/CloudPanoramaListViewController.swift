@@ -47,6 +47,11 @@ final class CloudPanoramaListViewController: UIViewController {
         if selectedCategory == "收藏" { applyFilter() }
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        ReviewPromptManager.requestSystemReviewIfEligibleAfterCloudScenes(in: self)
+    }
+
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         UMengAnalytics.shared.pageEnd("CloudPanoramaListViewController")
