@@ -40,6 +40,22 @@ enum NaviMode {
     }
 }
 
+final class NavigationRuntimeState {
+    static let shared = NavigationRuntimeState()
+
+    private init() {}
+
+    private(set) var isNavigating = false
+
+    func markNavigating() {
+        isNavigating = true
+    }
+
+    func clearNavigating() {
+        isNavigating = false
+    }
+}
+
 final class NaviViewController: UIViewController {
 
     private let start: SelectedPOI?
@@ -88,6 +104,7 @@ final class NaviViewController: UIViewController {
     }
 
     deinit {
+        NavigationRuntimeState.shared.clearNavigating()
         #if canImport(AMapNaviKit)
         switch mode {
         case .drive, .truck:
@@ -240,6 +257,7 @@ final class NaviViewController: UIViewController {
     // MARK: - 退出导航 (对应 Android onNaviCancel -> finish())
 
     @objc private func tapClose() {
+        NavigationRuntimeState.shared.clearNavigating()
         #if canImport(AMapNaviKit)
         switch mode {
         case .drive, .truck:
@@ -302,10 +320,12 @@ extension NaviViewController: AMapNaviDriveManagerDelegate {
 
     func driveManager(onCalculateRouteSuccess driveManager: AMapNaviDriveManager) {
         // 对应 Android mAMapNavi.startNavi(NaviType.GPS)
+        NavigationRuntimeState.shared.markNavigating()
         driveManager.startGPSNavi()
     }
 
     func driveManager(_ driveManager: AMapNaviDriveManager, onCalculateRouteFailure error: Error) {
+        NavigationRuntimeState.shared.clearNavigating()
         showRouteFailureAlert()
     }
 
@@ -315,6 +335,7 @@ extension NaviViewController: AMapNaviDriveManagerDelegate {
     }
 
     func driveManager(onArrivedDestination driveManager: AMapNaviDriveManager) {
+        NavigationRuntimeState.shared.clearNavigating()
         TTSController.shared.speak(L10n.t("navi.arrived"))
     }
 }
@@ -334,10 +355,12 @@ extension NaviViewController: AMapNaviDriveViewDelegate {
 extension NaviViewController: AMapNaviWalkManagerDelegate {
 
     func walkManager(onCalculateRouteSuccess walkManager: AMapNaviWalkManager) {
+        NavigationRuntimeState.shared.markNavigating()
         walkManager.startGPSNavi()
     }
 
     func walkManager(_ walkManager: AMapNaviWalkManager, onCalculateRouteFailure error: Error) {
+        NavigationRuntimeState.shared.clearNavigating()
         showRouteFailureAlert()
     }
 
@@ -346,6 +369,7 @@ extension NaviViewController: AMapNaviWalkManagerDelegate {
     }
 
     func walkManager(onArrivedDestination walkManager: AMapNaviWalkManager) {
+        NavigationRuntimeState.shared.clearNavigating()
         TTSController.shared.speak(L10n.t("navi.arrived"))
     }
 }
@@ -365,10 +389,12 @@ extension NaviViewController: AMapNaviWalkViewDelegate {
 extension NaviViewController: AMapNaviRideManagerDelegate {
 
     func rideManager(onCalculateRouteSuccess rideManager: AMapNaviRideManager) {
+        NavigationRuntimeState.shared.markNavigating()
         rideManager.startGPSNavi()
     }
 
     func rideManager(_ rideManager: AMapNaviRideManager, onCalculateRouteFailure error: Error) {
+        NavigationRuntimeState.shared.clearNavigating()
         showRouteFailureAlert()
     }
 
@@ -377,6 +403,7 @@ extension NaviViewController: AMapNaviRideManagerDelegate {
     }
 
     func rideManager(onArrivedDestination rideManager: AMapNaviRideManager) {
+        NavigationRuntimeState.shared.clearNavigating()
         TTSController.shared.speak(L10n.t("navi.arrived"))
     }
 }

@@ -149,6 +149,7 @@ extension PangleSplashAdManager: BUMSplashAdDelegate {
 
     func splashAdLoadFail(_ splashAd: BUSplashAd, error: BUAdError?) {
         isLoading = false
+        logMediationLoadInfo(for: splashAd, stage: "loadFail")
         let nsError = NSError(domain: "PangleSplashAdManager", code: Int(error?.code ?? -1),
                                userInfo: [NSLocalizedDescriptionKey: error?.localizedDescription ?? "未知错误"])
         completionHandler?(false, nsError)
@@ -159,6 +160,7 @@ extension PangleSplashAdManager: BUMSplashAdDelegate {
 
     func splashAdRenderFail(_ splashAd: BUSplashAd, error: BUAdError?) {
         isLoading = false
+        logMediationLoadInfo(for: splashAd, stage: "renderFail")
         completionHandler?(false, error)
         completionHandler = nil
     }
@@ -188,9 +190,34 @@ extension PangleSplashAdManager: BUMSplashAdDelegate {
 
     func splashAdDidShowFailed(_ splashAd: BUSplashAd, error: Error) {
         isLoading = false
+        logMediationLoadInfo(for: splashAd, stage: "showFail")
         completionHandler?(false, error)
         completionHandler = nil
         onClose?()
+    }
+
+    private func logMediationLoadInfo(for splashAd: BUSplashAd, stage: String) {
+        guard let mediation = splashAd.mediation else {
+            print("❌ GroMore开屏广告失败[\(stage)]: 无 mediation 信息")
+            return
+        }
+
+        let loadInfos = mediation.getAdLoadInfoList()
+        if loadInfos.isEmpty {
+            print("❌ GroMore开屏广告失败[\(stage)]: getAdLoadInfoList 为空")
+        } else {
+            print("❌ GroMore开屏广告失败[\(stage)] ADN详情 begin")
+            loadInfos.enumerated().forEach { index, info in
+                let customName = info.customAdnName ?? "-"
+                print("  [\(index)] adn=\(info.adnName), custom=\(customName), rit=\(info.mediationRit), code=\(info.errCode), msg=\(info.errMsg), userInfo=\(info.errUserInfo ?? [:])")
+            }
+            print("❌ GroMore开屏广告失败[\(stage)] ADN详情 end")
+        }
+
+        let waterfallMessages = mediation.waterfallFillFailMessages()
+        if !waterfallMessages.isEmpty {
+            print("❌ GroMore开屏广告 waterfallFillFailMessages: \(waterfallMessages)")
+        }
     }
 }
 #endif

@@ -119,8 +119,30 @@ final class RootViewController: UIViewController {
               !isShowingHotSplash else {
             return
         }
+
+        if isNavigationProtectedFromHotSplash {
+            self.backgroundEnteredAt = nil
+            return
+        }
+
         self.backgroundEnteredAt = nil
         showHotSplash()
+    }
+
+    private var isNavigationProtectedFromHotSplash: Bool {
+        if NavigationRuntimeState.shared.isNavigating {
+            return true
+        }
+
+        if currentChild is NaviViewController {
+            return true
+        }
+
+        if let navigationController = currentChild as? UINavigationController {
+            return navigationController.viewControllers.contains { $0 is NaviViewController }
+        }
+
+        return false
     }
 
     // MARK: - 启动页
