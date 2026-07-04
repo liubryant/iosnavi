@@ -104,10 +104,10 @@
 "world.source_title" = "720云";
 "world.cloud_panorama_title" = "720云世界景区";
 "cloud.welcome_title" = "探索720云景区";
-"cloud.welcome_message" = "珠穆朗玛与纳木措等精彩全景内容等你发现，进入720云景区沉浸式看世界。";
-"cloud.welcome_more" = "查看更多内容";
+"cloud.welcome_message" = "%@ 等精彩全景内容等你发现，进入720云景区沉浸式看世界。";
+"cloud.welcome_more" = "更多景区";
 "cloud.welcome_featured_accessibility" = "打开珠穆朗玛纳木措720全景";
-"cloud.welcome_recommendation" = "功能推荐";
+"cloud.welcome_recommendation" = "热门景区";
 "cloud.welcome_tap_hint" = "点击图片查看全景";
 "cloud.welcome_source_notice" = "全景内容将从720云网页加载";
 "cloud.search_placeholder" = "搜索世界720全景、导览、景区";

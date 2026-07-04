@@ -105,10 +105,10 @@
 "world.source_title" = "720 Cloud";
 "world.cloud_panorama_title" = "720 Cloud World Scenic Spots";
 "cloud.welcome_title" = "Explore 720° Scenic Views";
-"cloud.welcome_message" = "Discover immersive panoramas of Mount Everest, Namtso Lake, and many more destinations.";
-"cloud.welcome_more" = "View More";
+"cloud.welcome_message" = "Discover immersive panoramas of %@ and many more destinations.";
+"cloud.welcome_more" = "More Scenic Spots";
 "cloud.welcome_featured_accessibility" = "Open the Mount Everest and Namtso 720 panorama";
-"cloud.welcome_recommendation" = "Feature";
+"cloud.welcome_recommendation" = "Popular";
 "cloud.welcome_tap_hint" = "Tap the image to view";
 "cloud.welcome_source_notice" = "Panorama content loads from the 720yun website";
 "cloud.search_placeholder" = "Search 720 panoramas, tours, and scenic spots";

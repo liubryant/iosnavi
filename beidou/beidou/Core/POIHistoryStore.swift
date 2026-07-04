@@ -3,7 +3,7 @@
 //  beidou
 //  Author: Liuzheng <bryant_liu24@126.com>
 //
-//  终点搜索历史。只在用户选中终点并点击开始导航后写入。
+//  终点搜索历史。用户选中历史直接导航或点击开始导航时写入。
 //
 
 import Foundation

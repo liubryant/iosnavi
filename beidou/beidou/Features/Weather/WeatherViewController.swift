@@ -18,6 +18,7 @@ final class WeatherViewController: UIViewController {
 
     private let location: CurrentLocation?
 
+    private let backgroundView = WeatherAnimatedBackgroundView()
     private let backButton = UIButton(type: .system)
     private let cityLabel = UILabel()
     private let topWeatherIconView = UIImageView()
@@ -55,10 +56,14 @@ final class WeatherViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemGroupedBackground
+        view.backgroundColor = UIColor(red: 0.92, green: 0.97, blue: 1.0, alpha: 1.0)
+
+        backgroundView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(backgroundView)
 
         let scrollView = UIScrollView()
         scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.backgroundColor = .clear
 
         let contentStack = UIStackView()
         contentStack.axis = .vertical
@@ -125,6 +130,11 @@ final class WeatherViewController: UIViewController {
         view.addSubview(activityIndicator)
 
         NSLayoutConstraint.activate([
+            backgroundView.topAnchor.constraint(equalTo: view.topAnchor),
+            backgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            backgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            backgroundView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
             scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -200,8 +210,10 @@ final class WeatherViewController: UIViewController {
 
     private func makeCard(arrangedSubviews: [UIView]) -> UIView {
         let card = UIView()
-        card.backgroundColor = .secondarySystemGroupedBackground
+        card.backgroundColor = UIColor.secondarySystemGroupedBackground.withAlphaComponent(0.62)
         card.layer.cornerRadius = 12
+        card.layer.borderWidth = 0.5
+        card.layer.borderColor = UIColor.white.withAlphaComponent(0.7).cgColor
 
         let stack = UIStackView(arrangedSubviews: arrangedSubviews)
         stack.axis = .vertical
@@ -404,8 +416,40 @@ final class WeatherViewController: UIViewController {
         weatherIconView.tintColor = icon.color
         topWeatherIconView.image = UIImage(systemName: icon.name)
         topWeatherIconView.tintColor = icon.color
+        backgroundView.apply(scene: weatherScene(for: text))
         weatherIconView.isHidden = text.isEmpty
         topWeatherIconView.isHidden = text.isEmpty
+    }
+
+    private func weatherScene(for weather: String) -> WeatherAnimatedBackgroundView.Scene {
+        let value = weather.lowercased()
+
+        if value.contains("暴雨") || value.contains("大暴雨") || value.contains("特大暴雨") || value.contains("heavy rain") {
+            return .heavyRain
+        }
+        if value.contains("大雨") || value.contains("中雨") || value.contains("阵雨") || value.contains("雨") || value.contains("rain") {
+            return .rain
+        }
+        if value.contains("雷") || value.contains("thunder") || value.contains("storm") {
+            return .storm
+        }
+        if value.contains("雪") || value.contains("snow") {
+            return .snow
+        }
+        if value.contains("雾") || value.contains("霾") || value.contains("沙") || value.contains("尘") || value.contains("fog") || value.contains("haze") {
+            return .haze
+        }
+        if value.contains("阴") || value.contains("cloudy") {
+            return .cloudy
+        }
+        if value.contains("多云") || value.contains("少云") || value.contains("partly") {
+            return .partlyCloudy
+        }
+        if value.contains("晴") || value.contains("clear") || value.contains("sun") {
+            return .sunny
+        }
+
+        return .partlyCloudy
     }
 
     private func weatherIcon(for weather: String) -> (name: String, color: UIColor) {
@@ -549,6 +593,485 @@ final class WeatherViewController: UIViewController {
 
     @objc private func tapBack() {
         navigationController?.popViewController(animated: true)
+    }
+}
+
+final class WeatherAnimatedBackgroundView: UIView {
+    enum Scene: Equatable {
+        case sunny
+        case partlyCloudy
+        case cloudy
+        case rain
+        case heavyRain
+        case storm
+        case snow
+        case haze
+    }
+
+    private let gradientLayer = CAGradientLayer()
+    private let sunLayer = CAShapeLayer()
+    private let sunHaloLayer = CAShapeLayer()
+    private let sunlightLayer = CAEmitterLayer()
+    private let cloudShadowLayer = CALayer()
+    private let cloudLayer = CALayer()
+    private let secondCloudLayer = CALayer()
+    private let particleLayer = CAEmitterLayer()
+    private var currentScene: Scene = .partlyCloudy
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        clipsToBounds = true
+        setupLayers()
+        apply(scene: .partlyCloudy)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        gradientLayer.frame = bounds
+        sunlightLayer.frame = bounds
+        sunlightLayer.emitterPosition = CGPoint(x: bounds.width * 0.78, y: bounds.height * 0.18)
+        sunlightLayer.emitterSize = CGSize(width: bounds.width * 0.36, height: bounds.height * 0.22)
+        cloudShadowLayer.frame = CGRect(x: -60, y: bounds.height * 0.48, width: bounds.width + 160, height: max(180, bounds.height * 0.30))
+        particleLayer.frame = bounds
+        particleLayer.emitterPosition = CGPoint(x: bounds.midX - bounds.width * 0.18, y: -28)
+        particleLayer.emitterSize = CGSize(width: bounds.width * 1.8, height: 1)
+        layoutSun()
+        layoutClouds()
+    }
+
+    func apply(scene: Scene) {
+        guard scene != currentScene || gradientLayer.colors == nil else { return }
+        currentScene = scene
+        updateGradient(for: scene)
+        updateWeatherElements(for: scene)
+    }
+
+    private func setupLayers() {
+        layer.addSublayer(gradientLayer)
+        layer.addSublayer(sunHaloLayer)
+        layer.addSublayer(sunLayer)
+        layer.addSublayer(sunlightLayer)
+        layer.addSublayer(cloudShadowLayer)
+        layer.addSublayer(cloudLayer)
+        layer.addSublayer(secondCloudLayer)
+        layer.addSublayer(particleLayer)
+
+        sunLayer.fillColor = UIColor(red: 1.0, green: 0.72, blue: 0.12, alpha: 0.86).cgColor
+        sunHaloLayer.fillColor = UIColor(red: 1.0, green: 0.78, blue: 0.18, alpha: 0.34).cgColor
+        setupCloudShadows()
+        [cloudLayer, secondCloudLayer].forEach {
+            $0.opacity = 0.78
+            addCloudShapes(to: $0)
+        }
+        addCloudDrift(to: cloudShadowLayer, duration: 18, distance: 52)
+        addCloudDrift(to: cloudLayer, duration: 12, distance: 44)
+        addCloudDrift(to: secondCloudLayer, duration: 15, distance: -36)
+        addSunPulse()
+    }
+
+    private func updateGradient(for scene: Scene) {
+        let colors: [UIColor]
+        switch scene {
+        case .sunny:
+            colors = [
+                UIColor(red: 0.62, green: 0.85, blue: 1.0, alpha: 1.0),
+                UIColor(red: 0.92, green: 0.98, blue: 1.0, alpha: 1.0),
+                UIColor(red: 1.0, green: 0.91, blue: 0.66, alpha: 1.0)
+            ]
+        case .partlyCloudy:
+            colors = [
+                UIColor(red: 0.72, green: 0.88, blue: 1.0, alpha: 1.0),
+                UIColor(red: 0.95, green: 0.98, blue: 1.0, alpha: 1.0),
+                UIColor(red: 1.0, green: 0.94, blue: 0.78, alpha: 1.0)
+            ]
+        case .cloudy, .haze:
+            colors = [
+                UIColor(red: 0.86, green: 0.92, blue: 0.97, alpha: 1.0),
+                UIColor(red: 0.96, green: 0.98, blue: 0.99, alpha: 1.0),
+                UIColor(red: 0.98, green: 0.98, blue: 0.95, alpha: 1.0)
+            ]
+        case .rain, .heavyRain, .storm:
+            colors = [
+                UIColor(red: 0.82, green: 0.90, blue: 0.97, alpha: 1.0),
+                UIColor(red: 0.94, green: 0.97, blue: 1.0, alpha: 1.0),
+                UIColor(red: 0.99, green: 0.99, blue: 0.97, alpha: 1.0)
+            ]
+        case .snow:
+            colors = [
+                UIColor(red: 0.88, green: 0.95, blue: 1.0, alpha: 1.0),
+                UIColor(red: 0.98, green: 0.99, blue: 1.0, alpha: 1.0),
+                UIColor.white
+            ]
+        }
+
+        CATransaction.begin()
+        CATransaction.setAnimationDuration(0.45)
+        gradientLayer.colors = colors.map(\.cgColor)
+        gradientLayer.locations = [0.0, 0.56, 1.0]
+        gradientLayer.startPoint = CGPoint(x: 0.2, y: 0)
+        gradientLayer.endPoint = CGPoint(x: 0.9, y: 1)
+        CATransaction.commit()
+    }
+
+    private func updateWeatherElements(for scene: Scene) {
+        sunLayer.isHidden = [.cloudy, .rain, .heavyRain, .storm, .haze].contains(scene)
+        sunHaloLayer.isHidden = sunLayer.isHidden
+        sunlightLayer.isHidden = scene != .sunny
+        cloudShadowLayer.isHidden = ![.partlyCloudy, .cloudy].contains(scene)
+
+        switch scene {
+        case .sunny:
+            cloudLayer.opacity = 0.34
+            secondCloudLayer.opacity = 0.22
+            cloudShadowLayer.opacity = 0
+            configureParticles(kind: .sunlight, intensity: 0.34)
+            return
+        case .partlyCloudy:
+            cloudLayer.opacity = 0.92
+            secondCloudLayer.opacity = 0.66
+            cloudShadowLayer.opacity = 0.44
+            configureParticles(kind: .sunlight, intensity: 0.18)
+            return
+        case .cloudy:
+            cloudLayer.opacity = 0.96
+            secondCloudLayer.opacity = 0.86
+            cloudShadowLayer.opacity = 0.52
+        default:
+            cloudLayer.opacity = 0.82
+            secondCloudLayer.opacity = [.rain, .heavyRain, .storm, .haze].contains(scene) ? 0.68 : 0.38
+            cloudShadowLayer.opacity = 0
+        }
+
+        switch scene {
+        case .rain:
+            configureParticles(kind: .rain, intensity: 0.42)
+        case .heavyRain, .storm:
+            configureParticles(kind: .rain, intensity: 0.72)
+        case .snow:
+            configureParticles(kind: .snow, intensity: 0.36)
+        case .haze:
+            configureParticles(kind: .mist, intensity: 0.18)
+        default:
+            particleLayer.emitterCells = nil
+            sunlightLayer.emitterCells = nil
+        }
+    }
+
+    private func layoutSun() {
+        let sunDiameter = max(bounds.width * 0.28, 108)
+        let sunFrame = CGRect(x: bounds.width - sunDiameter * 0.82, y: 82, width: sunDiameter, height: sunDiameter)
+        let haloFrame = sunFrame.insetBy(dx: -34, dy: -34)
+        sunLayer.path = UIBezierPath(ovalIn: sunFrame).cgPath
+        sunHaloLayer.path = UIBezierPath(ovalIn: haloFrame).cgPath
+    }
+
+    private func layoutClouds() {
+        cloudLayer.frame = CGRect(x: -24, y: 120, width: bounds.width + 80, height: 150)
+        secondCloudLayer.frame = CGRect(x: 36, y: 260, width: bounds.width + 70, height: 130)
+    }
+
+    private func addCloudShapes(to layer: CALayer) {
+        addCloudGroup(
+            to: layer,
+            origin: CGPoint(x: -12, y: 26),
+            scale: 1.08,
+            alpha: 0.84
+        )
+        addCloudGroup(
+            to: layer,
+            origin: CGPoint(x: 236, y: 10),
+            scale: 1.24,
+            alpha: 0.78
+        )
+        addCloudGroup(
+            to: layer,
+            origin: CGPoint(x: 510, y: 42),
+            scale: 0.96,
+            alpha: 0.72
+        )
+    }
+
+    private func addCloudGroup(to layer: CALayer, origin: CGPoint, scale: CGFloat, alpha: CGFloat) {
+        let shadow = CAShapeLayer()
+        shadow.fillColor = UIColor(red: 0.58, green: 0.72, blue: 0.88, alpha: 0.18 * alpha).cgColor
+        shadow.path = UIBezierPath(
+            roundedRect: CGRect(
+                x: origin.x + 12 * scale,
+                y: origin.y + 66 * scale,
+                width: 252 * scale,
+                height: 42 * scale
+            ),
+            cornerRadius: 22 * scale
+        ).cgPath
+        layer.addSublayer(shadow)
+
+        let pieces: [(CGRect, CGFloat)] = [
+            (CGRect(x: 0, y: 62, width: 280, height: 58), 29),
+            (CGRect(x: 24, y: 46, width: 90, height: 70), 35),
+            (CGRect(x: 86, y: 18, width: 118, height: 96), 48),
+            (CGRect(x: 172, y: 36, width: 100, height: 76), 38),
+            (CGRect(x: 222, y: 58, width: 86, height: 54), 27)
+        ]
+
+        for (rect, radius) in pieces {
+            let frame = CGRect(
+                x: origin.x + rect.origin.x * scale,
+                y: origin.y + rect.origin.y * scale,
+                width: rect.width * scale,
+                height: rect.height * scale
+            )
+            let shape = CAShapeLayer()
+            shape.fillColor = UIColor.white.withAlphaComponent(alpha).cgColor
+            shape.path = UIBezierPath(roundedRect: frame, cornerRadius: radius * scale).cgPath
+            layer.addSublayer(shape)
+        }
+
+        let highlight = CAShapeLayer()
+        highlight.fillColor = UIColor.white.withAlphaComponent(0.28 * alpha).cgColor
+        highlight.path = UIBezierPath(
+            ovalIn: CGRect(
+                x: origin.x + 78 * scale,
+                y: origin.y + 30 * scale,
+                width: 104 * scale,
+                height: 34 * scale
+            )
+        ).cgPath
+        layer.addSublayer(highlight)
+    }
+
+    private func setupCloudShadows() {
+        addLowerCloudGroup(to: cloudShadowLayer, origin: CGPoint(x: -28, y: 18), scale: 1.15, alpha: 0.34)
+        addLowerCloudGroup(to: cloudShadowLayer, origin: CGPoint(x: 230, y: 54), scale: 1.34, alpha: 0.30)
+        addLowerCloudGroup(to: cloudShadowLayer, origin: CGPoint(x: 560, y: 34), scale: 1.0, alpha: 0.26)
+        cloudShadowLayer.isHidden = true
+    }
+
+    private func addLowerCloudGroup(to layer: CALayer, origin: CGPoint, scale: CGFloat, alpha: CGFloat) {
+        let cloud = CAShapeLayer()
+        cloud.fillColor = UIColor(red: 0.32, green: 0.50, blue: 0.72, alpha: alpha).cgColor
+        cloud.path = lowerCloudPath(origin: origin, scale: scale).cgPath
+        layer.addSublayer(cloud)
+
+        let softHighlight = CAShapeLayer()
+        softHighlight.fillColor = UIColor.white.withAlphaComponent(alpha * 0.26).cgColor
+        softHighlight.path = UIBezierPath(
+            ovalIn: CGRect(
+                x: origin.x + 92 * scale,
+                y: origin.y + 26 * scale,
+                width: 128 * scale,
+                height: 30 * scale
+            )
+        ).cgPath
+        layer.addSublayer(softHighlight)
+    }
+
+    private func lowerCloudPath(origin: CGPoint, scale: CGFloat) -> UIBezierPath {
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: origin.x + x * scale, y: origin.y + y * scale)
+        }
+
+        let path = UIBezierPath()
+        path.move(to: point(8, 76))
+        path.addCurve(to: point(58, 52), controlPoint1: point(16, 58), controlPoint2: point(35, 48))
+        path.addCurve(to: point(118, 28), controlPoint1: point(64, 28), controlPoint2: point(91, 16))
+        path.addCurve(to: point(178, 40), controlPoint1: point(142, 6), controlPoint2: point(174, 12))
+        path.addCurve(to: point(244, 48), controlPoint1: point(196, 26), controlPoint2: point(225, 27))
+        path.addCurve(to: point(306, 68), controlPoint1: point(271, 42), controlPoint2: point(296, 50))
+        path.addCurve(to: point(344, 90), controlPoint1: point(326, 66), controlPoint2: point(342, 75))
+        path.addCurve(to: point(298, 108), controlPoint1: point(338, 103), controlPoint2: point(321, 110))
+        path.addLine(to: point(54, 108))
+        path.addCurve(to: point(8, 76), controlPoint1: point(28, 109), controlPoint2: point(8, 98))
+        path.close()
+        return path
+    }
+
+    private func addCloudDrift(to layer: CALayer, duration: CFTimeInterval, distance: CGFloat) {
+        let animation = CABasicAnimation(keyPath: "transform.translation.x")
+        animation.fromValue = -distance
+        animation.toValue = distance
+        animation.duration = duration
+        animation.autoreverses = true
+        animation.repeatCount = .infinity
+        animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        layer.add(animation, forKey: "cloudDrift")
+    }
+
+    private func addSunPulse() {
+        let animation = CABasicAnimation(keyPath: "opacity")
+        animation.fromValue = 0.22
+        animation.toValue = 0.42
+        animation.duration = 3.8
+        animation.autoreverses = true
+        animation.repeatCount = .infinity
+        animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        sunHaloLayer.add(animation, forKey: "sunPulse")
+    }
+
+    private enum ParticleKind {
+        case rain
+        case snow
+        case mist
+        case sunlight
+    }
+
+    private func configureParticles(kind: ParticleKind, intensity: Float) {
+        particleLayer.emitterShape = .line
+        particleLayer.emitterMode = .surface
+
+        switch kind {
+        case .sunlight:
+            let glint = makeParticleCell(
+                kind: .sunlight,
+                birthRate: 90 * intensity,
+                lifetime: 7.2,
+                velocity: 10,
+                velocityRange: 16,
+                yAcceleration: -1,
+                xAcceleration: -3,
+                emissionLongitude: .pi,
+                emissionRange: .pi,
+                scale: 0.72,
+                scaleRange: 0.42,
+                alphaSpeed: -0.055
+            )
+            sunlightLayer.emitterShape = .rectangle
+            sunlightLayer.emitterMode = .surface
+            sunlightLayer.emitterCells = [glint]
+            particleLayer.emitterCells = nil
+        case .rain:
+            sunlightLayer.emitterCells = nil
+            let farRain = makeParticleCell(
+                kind: .rain,
+                birthRate: 72 * intensity,
+                lifetime: 4.8,
+                velocity: 210,
+                velocityRange: 54,
+                yAcceleration: 245,
+                xAcceleration: -12,
+                emissionLongitude: .pi * 0.51,
+                emissionRange: 0.16,
+                scale: 0.58,
+                scaleRange: 0.12,
+                alphaSpeed: -0.055
+            )
+            let nearRain = makeParticleCell(
+                kind: .rain,
+                birthRate: 42 * intensity,
+                lifetime: 3.7,
+                velocity: 285,
+                velocityRange: 62,
+                yAcceleration: 310,
+                xAcceleration: -18,
+                emissionLongitude: .pi * 0.52,
+                emissionRange: 0.12,
+                scale: 0.98,
+                scaleRange: 0.18,
+                alphaSpeed: -0.07
+            )
+            particleLayer.emitterCells = [farRain, nearRain]
+        case .snow:
+            sunlightLayer.emitterCells = nil
+            particleLayer.emitterCells = [
+                makeParticleCell(
+                    kind: .snow,
+                    birthRate: 90 * intensity,
+                    lifetime: 9,
+                    velocity: 34,
+                    velocityRange: 18,
+                    yAcceleration: 16,
+                    xAcceleration: 10,
+                    emissionLongitude: .pi * 0.5,
+                    emissionRange: 0.45,
+                    scale: 0.7,
+                    scaleRange: 0.5,
+                    alphaSpeed: -0.06
+                )
+            ]
+        case .mist:
+            sunlightLayer.emitterCells = nil
+            particleLayer.emitterCells = [
+                makeParticleCell(
+                    kind: .mist,
+                    birthRate: 90 * intensity,
+                    lifetime: 4.2,
+                    velocity: 250,
+                    velocityRange: 42,
+                    yAcceleration: 280,
+                    xAcceleration: 10,
+                    emissionLongitude: .pi * 0.5,
+                    emissionRange: 0.45,
+                    scale: 0.7,
+                    scaleRange: 0.16,
+                    alphaSpeed: -0.18
+                )
+            ]
+        }
+    }
+
+    private func makeParticleCell(
+        kind: ParticleKind,
+        birthRate: Float,
+        lifetime: Float,
+        velocity: CGFloat,
+        velocityRange: CGFloat,
+        yAcceleration: CGFloat,
+        xAcceleration: CGFloat,
+        emissionLongitude: CGFloat,
+        emissionRange: CGFloat,
+        scale: CGFloat,
+        scaleRange: CGFloat,
+        alphaSpeed: Float
+    ) -> CAEmitterCell {
+        let cell = CAEmitterCell()
+        cell.birthRate = birthRate
+        cell.lifetime = lifetime
+        cell.velocity = velocity
+        cell.velocityRange = velocityRange
+        cell.yAcceleration = yAcceleration
+        cell.xAcceleration = xAcceleration
+        cell.emissionLongitude = emissionLongitude
+        cell.emissionRange = emissionRange
+        cell.scale = scale
+        cell.scaleRange = scaleRange
+        cell.alphaSpeed = alphaSpeed
+        cell.contents = particleImage(for: kind).cgImage
+        return cell
+    }
+
+    private func particleImage(for kind: ParticleKind) -> UIImage {
+        let size: CGSize
+        switch kind {
+        case .rain:
+            size = CGSize(width: 3, height: 18)
+        case .sunlight:
+            size = CGSize(width: 12, height: 12)
+        default:
+            size = CGSize(width: 8, height: 8)
+        }
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { context in
+            let rect = CGRect(origin: .zero, size: size)
+            switch kind {
+            case .rain:
+                UIColor(red: 0.43, green: 0.67, blue: 0.93, alpha: 0.36).setFill()
+                UIBezierPath(roundedRect: rect, cornerRadius: 1.5).fill()
+            case .snow:
+                UIColor.white.withAlphaComponent(0.74).setFill()
+                UIBezierPath(ovalIn: rect).fill()
+            case .mist:
+                UIColor.white.withAlphaComponent(0.28).setFill()
+                context.cgContext.fillEllipse(in: rect)
+            case .sunlight:
+                UIColor(red: 1.0, green: 0.78, blue: 0.18, alpha: 0.48).setFill()
+                UIBezierPath(ovalIn: rect).fill()
+            }
+        }
     }
 }
 

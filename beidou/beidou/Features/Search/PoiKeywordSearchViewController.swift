@@ -20,6 +20,7 @@ import AMapNaviKit
 final class PoiKeywordSearchViewController: UIViewController {
 
     var onSelect: ((SelectedPOI) -> Void)?
+    var onSelectHistory: ((SelectedPOI) -> Void)?
 
     private let city: String
     private let location: CurrentLocation?
@@ -335,6 +336,10 @@ extension PoiKeywordSearchViewController: UITableViewDataSource, UITableViewDele
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         let poi = results[indexPath.row]
+        if isShowingHistory {
+            onSelectHistory?(poi)
+            return
+        }
         onSelect?(poi)
         navigationController?.popViewController(animated: true)
     }

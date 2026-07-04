@@ -20,6 +20,8 @@ import BaiduMapAPI_Base
 
 final class MapViewController: UIViewController {
 
+    private static var didShowCloudPanoramaWelcomeThisLaunch = false
+
     /// 抽屉容器，由 RootViewController 创建后注入
     weak var sideMenuContainer: SideMenuContainerViewController?
 
@@ -41,6 +43,7 @@ final class MapViewController: UIViewController {
     private var currentMapType: MapDisplayType = .satellite
     private var currentLocation: CurrentLocation?
     private var cloudWelcomeWorkItem: DispatchWorkItem?
+    private let defaultZoomLevel: Float = 18
 
     init(sideMenuViewController: SideMenuViewController) {
         self.sideMenuVC = sideMenuViewController
@@ -86,7 +89,7 @@ final class MapViewController: UIViewController {
     }
 
     private func scheduleCloudPanoramaWelcomeIfNeeded(after delay: TimeInterval = 5) {
-        guard !SpUtil.bool(.cloudPanoramaWelcomeShown), cloudWelcomeWorkItem == nil else { return }
+        guard !Self.didShowCloudPanoramaWelcomeThisLaunch, cloudWelcomeWorkItem == nil else { return }
         let workItem = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.cloudWelcomeWorkItem = nil
@@ -103,13 +106,16 @@ final class MapViewController: UIViewController {
     }
 
     private func showCloudPanoramaWelcome() {
-        guard !SpUtil.bool(.cloudPanoramaWelcomeShown) else { return }
-        SpUtil.setBool(true, for: .cloudPanoramaWelcomeShown)
-        let popup = CloudPanoramaWelcomeViewController()
+        guard !Self.didShowCloudPanoramaWelcomeThisLaunch,
+              let item = randomCloudPanoramaWelcomeItem() else {
+            return
+        }
+        Self.didShowCloudPanoramaWelcomeThisLaunch = true
+        SpUtil.setString(item.id, for: .lastCloudPanoramaWelcomeID)
+        let popup = CloudPanoramaWelcomeViewController(item: item)
         popup.onOpenFeatured = { [weak self] in
-            guard let url = URL(string: "https://www.720yun.com/t/7a9jvztkeO5?scene_id=20321714") else { return }
             self?.navigationController?.pushViewController(
-                CloudPanoramaWebViewController(title: "珠穆朗玛纳木措", url: url),
+                CloudPanoramaWebViewController(title: item.title, url: item.url),
                 animated: true
             )
         }
@@ -117,6 +123,15 @@ final class MapViewController: UIViewController {
             self?.navigationController?.pushViewController(CloudPanoramaListViewController(), animated: true)
         }
         present(popup, animated: true)
+    }
+
+    private func randomCloudPanoramaWelcomeItem() -> CloudScenicItem? {
+        let items = CloudScenicItem.all
+        guard !items.isEmpty else { return nil }
+
+        let lastID = SpUtil.string(.lastCloudPanoramaWelcomeID)
+        let candidates = items.filter { $0.id != lastID }
+        return (candidates.isEmpty ? items : candidates).randomElement()
     }
 
     // MARK: - 地图
@@ -132,7 +147,7 @@ final class MapViewController: UIViewController {
         ])
         #if canImport(BaiduMapAPI_Map)
         mapView.delegate = self
-        mapView.zoomLevel = 16
+        mapView.zoomLevel = defaultZoomLevel
         let center = CoordinateConverter.gcj02ToBD09(
             CLLocationCoordinate2D(latitude: Constants.defaultStartLat, longitude: Constants.defaultStartLon)
         )

@@ -4,9 +4,11 @@ final class CloudPanoramaWelcomeViewController: UIViewController {
     var onOpenFeatured: (() -> Void)?
     var onViewMore: (() -> Void)?
 
+    private let item: CloudScenicItem
     private let cardView = UIView()
 
-    init() {
+    init(item: CloudScenicItem) {
+        self.item = item
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .overFullScreen
         modalTransitionStyle = .crossDissolve
@@ -34,11 +36,10 @@ final class CloudPanoramaWelcomeViewController: UIViewController {
         imageView.clipsToBounds = true
         imageView.isUserInteractionEnabled = true
         imageView.isAccessibilityElement = true
-        imageView.accessibilityLabel = L10n.t("cloud.welcome_featured_accessibility")
+        imageView.accessibilityLabel = "\(L10n.t("cloud.welcome_featured_accessibility")) \(item.title)"
         imageView.accessibilityTraits = .button
         imageView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openFeatured)))
-        if let url = Bundle.main.url(forResource: "93_珠穆朗玛纳木措.jpg", withExtension: nil)
-            ?? Bundle.main.url(forResource: "93_珠穆朗玛纳木措.jpg", withExtension: nil, subdirectory: "720yun") {
+        if let url = item.coverImageURL {
             imageView.image = UIImage(contentsOfFile: url.path)
         }
         if imageView.image == nil {
@@ -61,13 +62,14 @@ final class CloudPanoramaWelcomeViewController: UIViewController {
         closeButton.translatesAutoresizingMaskIntoConstraints = false
 
         let titleLabel = UILabel()
-        titleLabel.text = L10n.t("cloud.welcome_title")
+        titleLabel.text = item.title
         titleLabel.font = .systemFont(ofSize: 18, weight: .bold)
         titleLabel.textColor = .label
         titleLabel.textAlignment = .center
+        titleLabel.numberOfLines = 2
 
         let messageLabel = UILabel()
-        messageLabel.text = L10n.t("cloud.welcome_message")
+        messageLabel.text = L10n.f("cloud.welcome_message", item.title)
         messageLabel.font = .systemFont(ofSize: 13)
         messageLabel.textColor = .secondaryLabel
         messageLabel.textAlignment = .center
@@ -82,8 +84,8 @@ final class CloudPanoramaWelcomeViewController: UIViewController {
 
         var buttonConfiguration = UIButton.Configuration.filled()
         buttonConfiguration.title = L10n.t("cloud.welcome_more")
-        buttonConfiguration.cornerStyle = .capsule
-        buttonConfiguration.baseBackgroundColor = UIColor(named: "ThemeBlue") ?? .systemBlue
+        buttonConfiguration.cornerStyle = .small
+        buttonConfiguration.baseBackgroundColor = .systemBlue
         let moreButton = UIButton(configuration: buttonConfiguration)
         moreButton.addTarget(self, action: #selector(viewMore), for: .touchUpInside)
         moreButton.heightAnchor.constraint(equalToConstant: 42).isActive = true

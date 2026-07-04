@@ -10,6 +10,10 @@
 import UIKit
 import CoreLocation
 
+#if canImport(AMapSearchKit)
+import AMapSearchKit
+#endif
+
 final class RoutePlanViewController: UIViewController {
 
     private let startLocation: CurrentLocation?
@@ -18,17 +22,37 @@ final class RoutePlanViewController: UIViewController {
     private var naviMode: NaviMode = .drive
     private var didLoadFeedAd = false
     private var feedAdHeightConstraint: NSLayoutConstraint?
+    #if canImport(AMapSearchKit)
+    private let searchAPI = AMapSearchAPI()
+    private var weatherCandidates: [String] = []
+    private var activeWeatherCity: String?
+    #endif
 
     // UI
+    private let backgroundView = WeatherAnimatedBackgroundView()
     private let startLabel = UILabel()
     private let destinationLabel = UILabel()
+    private let topWeatherIconView = UIImageView()
     private var modeButtons: [NaviMode: UIButton] = [:]
     private let feedAdContainer = UIView()
 
     init(startLocation: CurrentLocation? = nil, endLocation: CurrentLocation? = nil) {
         self.startLocation = startLocation
         super.init(nibName: nil, bundle: nil)
+        if let endLocation {
+            self.destinationPOI = SelectedPOI(
+                name: endLocation.address.isEmpty ? endLocation.city : endLocation.address,
+                address: endLocation.address,
+                latitude: endLocation.latitude,
+                longitude: endLocation.longitude
+            )
+        } else {
+            self.destinationPOI = POIHistoryStore.load().first
+        }
         self.title = L10n.t("route.title")
+        #if canImport(AMapSearchKit)
+        searchAPI?.delegate = self
+        #endif
     }
 
     @available(*, unavailable)
@@ -38,8 +62,11 @@ final class RoutePlanViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemGroupedBackground
+        view.backgroundColor = UIColor(red: 0.92, green: 0.97, blue: 1.0, alpha: 1.0)
 
+        setupWeatherBackground()
+
+        setupWeatherIcon()
         setupCloseButton()
         let card = setupInputCard()
         let modeRow = setupModeButtons()
@@ -60,6 +87,18 @@ final class RoutePlanViewController: UIViewController {
 
         updateLabels()
         updateModeButtons()
+        loadWeatherStyle()
+    }
+
+    private func setupWeatherBackground() {
+        backgroundView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(backgroundView)
+        NSLayoutConstraint.activate([
+            backgroundView.topAnchor.constraint(equalTo: view.topAnchor),
+            backgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            backgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            backgroundView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -101,7 +140,7 @@ final class RoutePlanViewController: UIViewController {
 
         let titleLabel = UILabel()
         titleLabel.text = L10n.t("search.destination_satellite_title")
-        titleLabel.font = .systemFont(ofSize: 16, weight: .regular)
+        titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
         titleLabel.textAlignment = .center
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(titleLabel)
@@ -109,7 +148,21 @@ final class RoutePlanViewController: UIViewController {
             titleLabel.centerYAnchor.constraint(equalTo: button.centerYAnchor),
             titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             titleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: button.trailingAnchor, constant: 8),
-            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -12)
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: topWeatherIconView.leadingAnchor, constant: -8)
+        ])
+    }
+
+    private func setupWeatherIcon() {
+        topWeatherIconView.contentMode = .scaleAspectFit
+        topWeatherIconView.tintColor = .systemOrange
+        topWeatherIconView.image = UIImage(systemName: "cloud.sun.fill")
+        topWeatherIconView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(topWeatherIconView)
+        NSLayoutConstraint.activate([
+            topWeatherIconView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 14),
+            topWeatherIconView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -14),
+            topWeatherIconView.widthAnchor.constraint(equalToConstant: 30),
+            topWeatherIconView.heightAnchor.constraint(equalToConstant: 30)
         ])
     }
 
@@ -117,8 +170,10 @@ final class RoutePlanViewController: UIViewController {
 
     private func setupInputCard() -> UIView {
         let card = UIView()
-        card.backgroundColor = .secondarySystemGroupedBackground
+        card.backgroundColor = UIColor.secondarySystemGroupedBackground.withAlphaComponent(0.62)
         card.layer.cornerRadius = 12
+        card.layer.borderWidth = 0.5
+        card.layer.borderColor = UIColor.white.withAlphaComponent(0.7).cgColor
         card.translatesAutoresizingMaskIntoConstraints = false
 
         // 我的位置 行
@@ -279,24 +334,24 @@ final class RoutePlanViewController: UIViewController {
     private func setupActionButtons() -> UIView {
         let nearButton = UIButton(type: .system)
         nearButton.setTitle(L10n.t("route.near_panorama"), for: .normal)
-        nearButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .medium)
+        nearButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
         nearButton.titleLabel?.adjustsFontSizeToFitWidth = true
         nearButton.titleLabel?.minimumScaleFactor = 0.82
         nearButton.backgroundColor = .systemBlue
         nearButton.setTitleColor(.white, for: .normal)
-        nearButton.layer.cornerRadius = 8
-        nearButton.heightAnchor.constraint(equalToConstant: 40).isActive = true
+        nearButton.layer.cornerRadius = 10
+        nearButton.heightAnchor.constraint(equalToConstant: 52).isActive = true
         nearButton.addTarget(self, action: #selector(tapNearPanorama), for: .touchUpInside)
 
         let naviButton = UIButton(type: .system)
         naviButton.setTitle(L10n.t("route.start_navigation"), for: .normal)
-        naviButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .medium)
+        naviButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
         naviButton.titleLabel?.adjustsFontSizeToFitWidth = true
         naviButton.titleLabel?.minimumScaleFactor = 0.82
         naviButton.backgroundColor = .systemBlue
         naviButton.setTitleColor(.white, for: .normal)
-        naviButton.layer.cornerRadius = 8
-        naviButton.heightAnchor.constraint(equalToConstant: 40).isActive = true
+        naviButton.layer.cornerRadius = 10
+        naviButton.heightAnchor.constraint(equalToConstant: 52).isActive = true
         naviButton.addTarget(self, action: #selector(tapStartNavi), for: .touchUpInside)
 
         let stack = UIStackView(arrangedSubviews: [nearButton, naviButton])
@@ -365,6 +420,178 @@ final class RoutePlanViewController: UIViewController {
         return CoordinateConverter.gcj02ToBD09(CLLocationCoordinate2D(latitude: poi.latitude, longitude: poi.longitude))
     }
 
+    private func weatherCityCandidates() -> [String] {
+        let location = startLocation ?? LocationManager.shared.lastKnownLocation
+        return [
+            cityLevelAdcode(from: location?.adcode),
+            location?.adcode,
+            location?.city,
+            Constants.city,
+            "110000"
+        ]
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+        .reduce(into: [String]()) { result, value in
+            if !result.contains(value) {
+                result.append(value)
+            }
+        }
+    }
+
+    private func cityLevelAdcode(from adcode: String?) -> String? {
+        guard let adcode = adcode?.trimmingCharacters(in: .whitespacesAndNewlines),
+              adcode.count == 6,
+              adcode.allSatisfy(\.isNumber) else {
+            return nil
+        }
+
+        let provincePrefix = String(adcode.prefix(2))
+        if ["11", "12", "31", "50"].contains(provincePrefix) {
+            return "\(provincePrefix)0000"
+        }
+
+        let cityPrefix = String(adcode.prefix(4))
+        return "\(cityPrefix)00"
+    }
+
+    private func loadWeatherStyle() {
+        #if canImport(AMapSearchKit)
+        weatherCandidates = weatherCityCandidates()
+        requestNextWeatherCandidate()
+        #else
+        loadCurrentWeatherStyle()
+        #endif
+    }
+
+    #if canImport(AMapSearchKit)
+    private func requestNextWeatherCandidate() {
+        guard let city = weatherCandidates.first else {
+            loadCurrentWeatherStyle(candidates: weatherCityCandidates())
+            return
+        }
+
+        activeWeatherCity = city
+        let request = AMapWeatherSearchRequest()
+        request.city = city
+        request.type = .live
+        searchAPI?.aMapWeatherSearch(request)
+    }
+
+    private func retryNextWeatherCandidate() {
+        guard !weatherCandidates.isEmpty else {
+            loadCurrentWeatherStyle(candidates: weatherCityCandidates())
+            return
+        }
+        weatherCandidates.removeFirst()
+        requestNextWeatherCandidate()
+    }
+    #endif
+
+    private func loadCurrentWeatherStyle(candidates: [String]? = nil) {
+        let values = candidates ?? weatherCityCandidates()
+        guard let city = values.first else { return }
+        ApiClient.fetchWeatherDetail(city: city) { [weak self] result in
+            guard let self else { return }
+            guard let live = (result.json?["lives"] as? [[String: Any]])?.first,
+                  let weather = live["weather"] as? String,
+                  !weather.isEmpty else {
+                self.loadCurrentWeatherStyle(candidates: Array(values.dropFirst()))
+                return
+            }
+            self.applyWeatherStyle(weather)
+        }
+    }
+
+    private func applyWeatherStyle(_ weather: String) {
+        let icon = weatherIcon(for: weather)
+        topWeatherIconView.image = UIImage(systemName: icon.name)
+        topWeatherIconView.tintColor = icon.color
+        backgroundView.apply(scene: weatherScene(for: weather))
+    }
+
+    private func weatherIcon(for weather: String) -> (name: String, color: UIColor) {
+        let value = weather.lowercased()
+
+        if value.contains("暴雨") || value.contains("大暴雨") || value.contains("特大暴雨") || value.contains("heavy rain") {
+            return ("cloud.heavyrain.fill", .systemBlue)
+        }
+        if value.contains("大雨") || value.contains("中雨") || value.contains("阵雨") || value.contains("雨") || value.contains("rain") {
+            return ("cloud.rain.fill", .systemBlue)
+        }
+        if value.contains("雷") || value.contains("thunder") || value.contains("storm") {
+            return ("cloud.bolt.rain.fill", .systemYellow)
+        }
+        if value.contains("雪") || value.contains("snow") {
+            return ("cloud.snow.fill", .systemTeal)
+        }
+        if value.contains("雾") || value.contains("霾") || value.contains("沙") || value.contains("尘") || value.contains("fog") || value.contains("haze") {
+            return ("cloud.fog.fill", .systemGray)
+        }
+        if value.contains("阴") || value.contains("cloudy") {
+            return ("cloud.fill", .systemGray)
+        }
+        if value.contains("多云") || value.contains("少云") || value.contains("partly") {
+            return ("cloud.sun.fill", .systemOrange)
+        }
+        if value.contains("晴") || value.contains("clear") || value.contains("sun") {
+            return ("sun.max.fill", .systemYellow)
+        }
+
+        return ("cloud.sun.fill", .systemOrange)
+    }
+
+    private func weatherScene(for weather: String) -> WeatherAnimatedBackgroundView.Scene {
+        let value = weather.lowercased()
+
+        if value.contains("暴雨") || value.contains("大暴雨") || value.contains("特大暴雨") || value.contains("heavy rain") {
+            return .heavyRain
+        }
+        if value.contains("大雨") || value.contains("中雨") || value.contains("阵雨") || value.contains("雨") || value.contains("rain") {
+            return .rain
+        }
+        if value.contains("雷") || value.contains("thunder") || value.contains("storm") {
+            return .storm
+        }
+        if value.contains("雪") || value.contains("snow") {
+            return .snow
+        }
+        if value.contains("雾") || value.contains("霾") || value.contains("沙") || value.contains("尘") || value.contains("fog") || value.contains("haze") {
+            return .haze
+        }
+        if value.contains("阴") || value.contains("cloudy") {
+            return .cloudy
+        }
+        if value.contains("多云") || value.contains("少云") || value.contains("partly") {
+            return .partlyCloudy
+        }
+        if value.contains("晴") || value.contains("clear") || value.contains("sun") {
+            return .sunny
+        }
+
+        return .partlyCloudy
+    }
+
+    private func startNavigation(to poi: SelectedPOI) {
+        destinationPOI = poi
+        routeSwapped = false
+        updateLabels()
+        POIHistoryStore.save(poi)
+        let naviVC = NaviViewController(start: currentLocationPOI(), end: poi, mode: naviMode)
+        guard let navigationController else { return }
+        if navigationController.topViewController === self {
+            navigationController.pushViewController(naviVC, animated: true)
+            return
+        }
+
+        if let currentIndex = navigationController.viewControllers.firstIndex(where: { $0 === self }) {
+            var viewControllers = Array(navigationController.viewControllers.prefix(through: currentIndex))
+            viewControllers.append(naviVC)
+            navigationController.setViewControllers(viewControllers, animated: true)
+        } else {
+            navigationController.pushViewController(naviVC, animated: true)
+        }
+    }
+
     // MARK: - 事件
 
     @objc private func tapClose() {
@@ -387,6 +614,9 @@ final class RoutePlanViewController: UIViewController {
             self?.destinationPOI = poi
             self?.routeSwapped = false
             self?.updateLabels()
+        }
+        searchVC.onSelectHistory = { [weak self] poi in
+            self?.startNavigation(to: poi)
         }
         navigationController?.pushViewController(searchVC, animated: true)
     }
@@ -431,3 +661,29 @@ final class RoutePlanViewController: UIViewController {
         present(alert, animated: true)
     }
 }
+
+#if canImport(AMapSearchKit)
+extension RoutePlanViewController: AMapSearchDelegate {
+    func onWeatherSearchDone(_ request: AMapWeatherSearchRequest, response: AMapWeatherSearchResponse) {
+        guard request.city == activeWeatherCity else { return }
+
+        guard let live = response.lives.first,
+              let weather = live.weather,
+              !weather.isEmpty else {
+            retryNextWeatherCandidate()
+            return
+        }
+
+        applyWeatherStyle(weather)
+    }
+
+    func aMapSearchRequest(_ request: Any, didFailWithError error: Error) {
+        guard let weatherRequest = request as? AMapWeatherSearchRequest,
+              weatherRequest.city == activeWeatherCity else {
+            return
+        }
+
+        retryNextWeatherCandidate()
+    }
+}
+#endif
