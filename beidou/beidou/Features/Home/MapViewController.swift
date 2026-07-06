@@ -44,6 +44,8 @@ final class MapViewController: UIViewController {
     private var currentLocation: CurrentLocation?
     private var cloudWelcomeWorkItem: DispatchWorkItem?
     private let defaultZoomLevel: Float = 18
+    private let minimumValidZoomLevel: Float = 3
+    private let maximumValidZoomLevel: Float = 21
 
     init(sideMenuViewController: SideMenuViewController) {
         self.sideMenuVC = sideMenuViewController
@@ -68,10 +70,21 @@ final class MapViewController: UIViewController {
 
         applyMapType(.satellite)
         refreshLocation()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(applicationDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        #if canImport(BaiduMapAPI_Map)
+        mapView.delegate = self
+        mapView.viewWillAppear()
+        recoverMapRenderingIfNeeded()
+        #endif
         UMengAnalytics.shared.pageBegin("MapViewController")
     }
 
@@ -85,7 +98,15 @@ final class MapViewController: UIViewController {
         super.viewWillDisappear(animated)
         cloudWelcomeWorkItem?.cancel()
         cloudWelcomeWorkItem = nil
+        #if canImport(BaiduMapAPI_Map)
+        mapView.viewWillDisappear()
+        mapView.delegate = nil
+        #endif
         UMengAnalytics.shared.pageEnd("MapViewController")
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     private func scheduleCloudPanoramaWelcomeIfNeeded(after delay: TimeInterval = 5) {
@@ -164,6 +185,38 @@ final class MapViewController: UIViewController {
             label.centerXAnchor.constraint(equalTo: mapView.centerXAnchor),
             label.centerYAnchor.constraint(equalTo: mapView.centerYAnchor)
         ])
+        #endif
+    }
+
+    @objc private func applicationDidBecomeActive() {
+        #if canImport(BaiduMapAPI_Map)
+        recoverMapRenderingIfNeeded()
+        #endif
+    }
+
+    private func recoverMapRenderingIfNeeded() {
+        #if canImport(BaiduMapAPI_Map)
+        guard viewIfLoaded?.window != nil else { return }
+        view.layoutIfNeeded()
+
+        let normalizedZoom = min(max(mapView.zoomLevel, minimumValidZoomLevel), maximumValidZoomLevel)
+        if normalizedZoom != mapView.zoomLevel {
+            mapView.zoomLevel = defaultZoomLevel
+        } else {
+            mapView.zoomLevel = normalizedZoom
+        }
+
+        if let currentLocation {
+            mapView.setCenter(bd09Coordinate(for: currentLocation), animated: false)
+        } else {
+            mapView.setCenter(
+                CoordinateConverter.gcj02ToBD09(
+                    CLLocationCoordinate2D(latitude: Constants.defaultStartLat, longitude: Constants.defaultStartLon)
+                ),
+                animated: false
+            )
+        }
+        applyMapType(currentMapType)
         #endif
     }
 

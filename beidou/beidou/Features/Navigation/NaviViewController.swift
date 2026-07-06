@@ -64,6 +64,8 @@ final class NaviViewController: UIViewController {
 
     private let titleLabel = UILabel()
     private let closeButton = UIButton(type: .system)
+    private var hasStartedNavigation = false
+    private var isShowingRouteFailureAlert = false
 
     #if canImport(AMapNaviKit)
     private var driveView: AMapNaviDriveView?
@@ -278,9 +280,15 @@ final class NaviViewController: UIViewController {
     }
 
     fileprivate func showRouteFailureAlert() {
+        guard !isShowingRouteFailureAlert else { return }
+        isShowingRouteFailureAlert = true
         let alert = UIAlertController(title: nil, message: L10n.t("navi.route_failed"), preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: L10n.t("common.ok"), style: .default) { [weak self] _ in
-            self?.tapClose()
+            guard let self else { return }
+            self.isShowingRouteFailureAlert = false
+            if !self.hasStartedNavigation {
+                self.tapClose()
+            }
         })
         present(alert, animated: true)
     }
@@ -320,12 +328,15 @@ extension NaviViewController: AMapNaviDriveManagerDelegate {
 
     func driveManager(onCalculateRouteSuccess driveManager: AMapNaviDriveManager) {
         // 对应 Android mAMapNavi.startNavi(NaviType.GPS)
+        hasStartedNavigation = true
         NavigationRuntimeState.shared.markNavigating()
         driveManager.startGPSNavi()
     }
 
     func driveManager(_ driveManager: AMapNaviDriveManager, onCalculateRouteFailure error: Error) {
-        NavigationRuntimeState.shared.clearNavigating()
+        if !hasStartedNavigation {
+            NavigationRuntimeState.shared.clearNavigating()
+        }
         showRouteFailureAlert()
     }
 
@@ -355,12 +366,15 @@ extension NaviViewController: AMapNaviDriveViewDelegate {
 extension NaviViewController: AMapNaviWalkManagerDelegate {
 
     func walkManager(onCalculateRouteSuccess walkManager: AMapNaviWalkManager) {
+        hasStartedNavigation = true
         NavigationRuntimeState.shared.markNavigating()
         walkManager.startGPSNavi()
     }
 
     func walkManager(_ walkManager: AMapNaviWalkManager, onCalculateRouteFailure error: Error) {
-        NavigationRuntimeState.shared.clearNavigating()
+        if !hasStartedNavigation {
+            NavigationRuntimeState.shared.clearNavigating()
+        }
         showRouteFailureAlert()
     }
 
@@ -389,12 +403,15 @@ extension NaviViewController: AMapNaviWalkViewDelegate {
 extension NaviViewController: AMapNaviRideManagerDelegate {
 
     func rideManager(onCalculateRouteSuccess rideManager: AMapNaviRideManager) {
+        hasStartedNavigation = true
         NavigationRuntimeState.shared.markNavigating()
         rideManager.startGPSNavi()
     }
 
     func rideManager(_ rideManager: AMapNaviRideManager, onCalculateRouteFailure error: Error) {
-        NavigationRuntimeState.shared.clearNavigating()
+        if !hasStartedNavigation {
+            NavigationRuntimeState.shared.clearNavigating()
+        }
         showRouteFailureAlert()
     }
 
