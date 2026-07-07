@@ -43,9 +43,9 @@ final class MapViewController: UIViewController {
     private var currentMapType: MapDisplayType = .satellite
     private var currentLocation: CurrentLocation?
     private var cloudWelcomeWorkItem: DispatchWorkItem?
+    private var hasCenteredInitialLocation = false
+    private var userDidMoveMap = false
     private let defaultZoomLevel: Float = 18
-    private let minimumValidZoomLevel: Float = 3
-    private let maximumValidZoomLevel: Float = 21
 
     init(sideMenuViewController: SideMenuViewController) {
         self.sideMenuVC = sideMenuViewController
@@ -69,13 +69,7 @@ final class MapViewController: UIViewController {
         setupBottomLabel()
 
         applyMapType(.satellite)
-        refreshLocation()
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(applicationDidBecomeActive),
-            name: UIApplication.didBecomeActiveNotification,
-            object: nil
-        )
+        refreshLocation(shouldCenterMap: true)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -83,7 +77,6 @@ final class MapViewController: UIViewController {
         #if canImport(BaiduMapAPI_Map)
         mapView.delegate = self
         mapView.viewWillAppear()
-        recoverMapRenderingIfNeeded()
         #endif
         UMengAnalytics.shared.pageBegin("MapViewController")
     }
@@ -103,10 +96,6 @@ final class MapViewController: UIViewController {
         mapView.delegate = nil
         #endif
         UMengAnalytics.shared.pageEnd("MapViewController")
-    }
-
-    deinit {
-        NotificationCenter.default.removeObserver(self)
     }
 
     private func scheduleCloudPanoramaWelcomeIfNeeded(after delay: TimeInterval = 5) {
@@ -159,13 +148,8 @@ final class MapViewController: UIViewController {
 
     private func setupMapView() {
         mapView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(mapView)
-        NSLayoutConstraint.activate([
-            mapView.topAnchor.constraint(equalTo: view.topAnchor),
-            mapView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            mapView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            mapView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-        ])
+        view.insertSubview(mapView, at: 0)
+        pinMapViewToEdges()
         #if canImport(BaiduMapAPI_Map)
         mapView.delegate = self
         mapView.zoomLevel = defaultZoomLevel
@@ -188,36 +172,13 @@ final class MapViewController: UIViewController {
         #endif
     }
 
-    @objc private func applicationDidBecomeActive() {
-        #if canImport(BaiduMapAPI_Map)
-        recoverMapRenderingIfNeeded()
-        #endif
-    }
-
-    private func recoverMapRenderingIfNeeded() {
-        #if canImport(BaiduMapAPI_Map)
-        guard viewIfLoaded?.window != nil else { return }
-        view.layoutIfNeeded()
-
-        let normalizedZoom = min(max(mapView.zoomLevel, minimumValidZoomLevel), maximumValidZoomLevel)
-        if normalizedZoom != mapView.zoomLevel {
-            mapView.zoomLevel = defaultZoomLevel
-        } else {
-            mapView.zoomLevel = normalizedZoom
-        }
-
-        if let currentLocation {
-            mapView.setCenter(bd09Coordinate(for: currentLocation), animated: false)
-        } else {
-            mapView.setCenter(
-                CoordinateConverter.gcj02ToBD09(
-                    CLLocationCoordinate2D(latitude: Constants.defaultStartLat, longitude: Constants.defaultStartLon)
-                ),
-                animated: false
-            )
-        }
-        applyMapType(currentMapType)
-        #endif
+    private func pinMapViewToEdges() {
+        NSLayoutConstraint.activate([
+            mapView.topAnchor.constraint(equalTo: view.topAnchor),
+            mapView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            mapView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            mapView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
     }
 
     /// 切换地图类型: 卫星图 / 普通图 / 路况图 (对应侧边栏地图类型选择)
@@ -428,21 +389,32 @@ final class MapViewController: UIViewController {
 
     // MARK: - 定位
 
-    private func refreshLocation() {
+    private func refreshLocation(shouldCenterMap: Bool) {
         LocationManager.shared.requestAuthorization()
 
         if let cached = LocationManager.shared.lastKnownLocation {
-            currentLocation = cached
-            sideMenuVC.updateCurrentLocation(displayLocation(for: cached))
-            centerMap(on: cached)
+            updateCurrentLocation(cached, shouldCenterMap: shouldCenterMap)
         }
 
         LocationManager.shared.requestLocation { [weak self] location in
             guard let self, let location else { return }
-            self.currentLocation = location
-            self.sideMenuVC.updateCurrentLocation(self.displayLocation(for: location))
-            self.centerMap(on: location)
+            self.updateCurrentLocation(location, shouldCenterMap: shouldCenterMap)
         }
+    }
+
+    private func updateCurrentLocation(_ location: CurrentLocation, shouldCenterMap: Bool, forceCenter: Bool = false) {
+        currentLocation = location
+        sideMenuVC.updateCurrentLocation(displayLocation(for: location))
+
+        #if canImport(BaiduMapAPI_Map)
+        let bd09 = bd09Coordinate(for: location)
+        let canCenterMap = forceCenter || (!hasCenteredInitialLocation && !userDidMoveMap)
+        if shouldCenterMap && canCenterMap {
+            mapView.setCenter(bd09, animated: true)
+            hasCenteredInitialLocation = true
+        }
+        resetCurrentLocationAnnotation(at: bd09)
+        #endif
     }
 
     private func displayLocation(for location: CurrentLocation) -> String {
@@ -456,14 +428,16 @@ final class MapViewController: UIViewController {
     }
 
     private func centerMap(on location: CurrentLocation) {
+        updateCurrentLocation(location, shouldCenterMap: true, forceCenter: true)
+    }
+
+    private func resetCurrentLocationAnnotation(at coordinate: CLLocationCoordinate2D) {
         #if canImport(BaiduMapAPI_Map)
-        let bd09 = bd09Coordinate(for: location)
-        mapView.setCenter(bd09, animated: true)
         if let annotations = mapView.annotations {
             mapView.removeAnnotations(annotations)
         }
         let annotation = BMKPointAnnotation()
-        annotation.coordinate = bd09
+        annotation.coordinate = coordinate
         annotation.title = L10n.t("common.my_location")
         mapView.addAnnotation(annotation)
         #endif
@@ -543,7 +517,7 @@ final class MapViewController: UIViewController {
             centerMap(on: cached)
             return
         }
-        refreshLocation()
+        refreshLocation(shouldCenterMap: true)
     }
 }
 
@@ -627,6 +601,12 @@ extension MapViewController: SideMenuViewControllerDelegate {
 
 #if canImport(BaiduMapAPI_Map)
 extension MapViewController: BMKMapViewDelegate {
+    func mapView(_ mapView: BMKMapView, regionWillChangeAnimated animated: Bool, reason: BMKRegionChangeReason) {
+        if reason == BMKRegionChangeReasonGesture {
+            userDidMoveMap = true
+        }
+    }
+
     func mapView(_ mapView: BMKMapView, viewFor annotation: BMKAnnotation) -> BMKAnnotationView? {
         guard annotation is BMKPointAnnotation else { return nil }
         let identifier = "currentLocation"

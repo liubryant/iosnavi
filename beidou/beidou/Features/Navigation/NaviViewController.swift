@@ -40,6 +40,46 @@ enum NaviMode {
     }
 }
 
+private enum NaviBroadcastMode: String, CaseIterable {
+    case concise
+    case standard
+    case detailed
+    case muted
+
+    private static let storageKey = "navi.broadcast.mode"
+
+    var title: String {
+        switch self {
+        case .concise: return "简洁播报"
+        case .standard: return "标准播报"
+        case .detailed: return "详细播报"
+        case .muted: return "静音模式"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .concise: return "只播转向、上下匝道、到达等关键提示"
+        case .standard: return "播报常规导航提示"
+        case .detailed: return "播报全部导航、路况和安全提示"
+        case .muted: return "关闭导航语音播报"
+        }
+    }
+
+    static var current: NaviBroadcastMode {
+        get {
+            guard let rawValue = UserDefaults.standard.string(forKey: storageKey),
+                  let mode = NaviBroadcastMode(rawValue: rawValue) else {
+                return .standard
+            }
+            return mode
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: storageKey)
+        }
+    }
+}
+
 final class NavigationRuntimeState {
     static let shared = NavigationRuntimeState()
 
@@ -64,6 +104,8 @@ final class NaviViewController: UIViewController {
 
     private let titleLabel = UILabel()
     private let closeButton = UIButton(type: .system)
+    private let brandOverlayView = UIView()
+    private let brandNameLabel = UILabel()
     private var hasStartedNavigation = false
     private var isShowingRouteFailureAlert = false
 
@@ -88,11 +130,17 @@ final class NaviViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .black
 
         setupNaviView()
         setupOverlay()
+        applyInterfaceStyle()
         startCalculateRoute()
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        guard previousTraitCollection?.userInterfaceStyle != traitCollection.userInterfaceStyle else { return }
+        applyInterfaceStyle()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -184,7 +232,7 @@ final class NaviViewController: UIViewController {
     private func setupOverlay() {
         titleLabel.text = mode.displayName
         titleLabel.textColor = .white
-        titleLabel.font = .boldSystemFont(ofSize: 16)
+        titleLabel.font = .boldSystemFont(ofSize: 18)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
         closeButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
@@ -194,15 +242,83 @@ final class NaviViewController: UIViewController {
 
         view.addSubview(titleLabel)
         view.addSubview(closeButton)
+        setupBrandOverlay()
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
-            titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 6),
+            titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            titleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 64),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -64),
 
             closeButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
             closeButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             closeButton.widthAnchor.constraint(equalToConstant: 30),
             closeButton.heightAnchor.constraint(equalToConstant: 30)
         ])
+    }
+
+    private func setupBrandOverlay() {
+        brandOverlayView.backgroundColor = UIColor(white: 1, alpha: 0.92)
+        brandOverlayView.layer.cornerRadius = 4
+        brandOverlayView.layer.cornerCurve = .continuous
+        brandOverlayView.layer.shadowColor = UIColor.black.cgColor
+        brandOverlayView.layer.shadowOpacity = 0.24
+        brandOverlayView.layer.shadowOffset = CGSize(width: 0, height: 2)
+        brandOverlayView.layer.shadowRadius = 7
+        brandOverlayView.isUserInteractionEnabled = false
+        brandOverlayView.translatesAutoresizingMaskIntoConstraints = false
+
+        let iconView = UIImageView(image: UIImage(named: "AppLogo") ?? UIImage(named: "AppIcon-1024"))
+        iconView.contentMode = .scaleAspectFill
+        iconView.clipsToBounds = true
+        iconView.layer.cornerRadius = 4
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+
+        brandNameLabel.text = "卫星导航地图"
+        brandNameLabel.font = .systemFont(ofSize: 11.5, weight: .semibold)
+        brandNameLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        let stack = UIStackView(arrangedSubviews: [iconView, brandNameLabel])
+        stack.axis = .horizontal
+        stack.alignment = .center
+        stack.spacing = 5
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        brandOverlayView.addSubview(stack)
+        view.addSubview(brandOverlayView)
+
+        NSLayoutConstraint.activate([
+            brandOverlayView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 10),
+            brandOverlayView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -67),
+            brandOverlayView.heightAnchor.constraint(equalToConstant: 28),
+
+            stack.leadingAnchor.constraint(equalTo: brandOverlayView.leadingAnchor, constant: 6),
+            stack.trailingAnchor.constraint(equalTo: brandOverlayView.trailingAnchor, constant: -6),
+            stack.centerYAnchor.constraint(equalTo: brandOverlayView.centerYAnchor),
+
+            iconView.widthAnchor.constraint(equalToConstant: 14),
+            iconView.heightAnchor.constraint(equalTo: iconView.widthAnchor)
+        ])
+    }
+
+    private func applyInterfaceStyle() {
+        let isDark = traitCollection.userInterfaceStyle == .dark
+        view.backgroundColor = isDark ? .black : .systemBackground
+        titleLabel.textColor = .white
+        closeButton.tintColor = .white
+        brandOverlayView.backgroundColor = isDark
+            ? UIColor(white: 0.08, alpha: 0.90)
+            : UIColor(white: 1, alpha: 0.92)
+        brandOverlayView.layer.shadowColor = UIColor.black.cgColor
+        brandNameLabel.textColor = isDark
+            ? UIColor(white: 0.96, alpha: 1)
+            : UIColor(red: 0.10, green: 0.13, blue: 0.18, alpha: 1)
+
+        #if canImport(AMapNaviKit)
+        let mapMode = AMapNaviViewMapModeType(rawValue: isDark ? 1 : 0) ?? AMapNaviViewMapModeType(rawValue: 0)!
+        driveView?.mapViewModeType = mapMode
+        walkView?.mapViewModeType = mapMode
+        rideView?.mapViewModeType = mapMode
+        #endif
     }
 
     // MARK: - 路线计算 (对应 BaseActivity 默认坐标 + xxxRouteCalculateActivity.calculateXxxRoute)
@@ -294,7 +410,12 @@ final class NaviViewController: UIViewController {
     }
 
     fileprivate func showNaviSettings() {
-        let alert = UIAlertController(title: L10n.t("navi.settings"), message: nil, preferredStyle: .actionSheet)
+        let currentBroadcastMode = NaviBroadcastMode.current
+        let alert = UIAlertController(
+            title: L10n.t("navi.settings"),
+            message: "当前播报模式：\(currentBroadcastMode.title)",
+            preferredStyle: .actionSheet
+        )
 
         #if canImport(AMapNaviKit)
         if let driveView {
@@ -305,6 +426,9 @@ final class NaviViewController: UIViewController {
         }
         #endif
 
+        alert.addAction(UIAlertAction(title: "播报模式：\(currentBroadcastMode.title)", style: .default) { [weak self] _ in
+            self?.showBroadcastModeSettings()
+        })
         alert.addAction(UIAlertAction(title: L10n.t("navi.exit"), style: .destructive) { [weak self] _ in
             self?.tapClose()
         })
@@ -317,6 +441,59 @@ final class NaviViewController: UIViewController {
         }
 
         present(alert, animated: true)
+    }
+
+    private func showBroadcastModeSettings() {
+        let alert = UIAlertController(title: "播报模式", message: "选择导航语音播报频率", preferredStyle: .actionSheet)
+        let currentMode = NaviBroadcastMode.current
+
+        NaviBroadcastMode.allCases.forEach { mode in
+            let prefix = mode == currentMode ? "✓ " : ""
+            alert.addAction(UIAlertAction(title: "\(prefix)\(mode.title) - \(mode.description)", style: .default) { _ in
+                NaviBroadcastMode.current = mode
+                if mode == .muted {
+                    TTSController.shared.stop()
+                }
+            })
+        }
+
+        alert.addAction(UIAlertAction(title: L10n.t("common.cancel"), style: .cancel))
+
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = view
+            popover.sourceRect = CGRect(x: view.bounds.midX, y: view.safeAreaInsets.top + 44, width: 1, height: 1)
+            popover.permittedArrowDirections = []
+        }
+
+        present(alert, animated: true)
+    }
+
+    fileprivate func speakNaviText(_ text: String) {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else { return }
+
+        switch NaviBroadcastMode.current {
+        case .muted:
+            TTSController.shared.stop()
+        case .detailed:
+            TTSController.shared.speak(trimmedText)
+        case .standard:
+            guard !isLowPriorityBroadcast(trimmedText) else { return }
+            TTSController.shared.speak(trimmedText)
+        case .concise:
+            guard isKeyBroadcast(trimmedText) else { return }
+            TTSController.shared.speak(trimmedText)
+        }
+    }
+
+    private func isLowPriorityBroadcast(_ text: String) -> Bool {
+        let keywords = ["电子眼", "摄像头", "限速", "路况", "拥堵", "缓行", "服务区", "加油站"]
+        return keywords.contains { text.contains($0) }
+    }
+
+    private func isKeyBroadcast(_ text: String) -> Bool {
+        let keywords = ["左转", "右转", "掉头", "直行", "靠左", "靠右", "匝道", "出口", "入口", "到达", "终点", "目的地", "重新规划"]
+        return keywords.contains { text.contains($0) }
     }
 }
 
@@ -342,12 +519,12 @@ extension NaviViewController: AMapNaviDriveManagerDelegate {
 
     /// 语音播报文本回调 (对应 Android TTSController.onGetNavigationText)
     func driveManager(_ driveManager: AMapNaviDriveManager, playNaviSound soundString: String, soundStringType: AMapNaviSoundType) {
-        TTSController.shared.speak(soundString)
+        speakNaviText(soundString)
     }
 
     func driveManager(onArrivedDestination driveManager: AMapNaviDriveManager) {
         NavigationRuntimeState.shared.clearNavigating()
-        TTSController.shared.speak(L10n.t("navi.arrived"))
+        speakNaviText(L10n.t("navi.arrived"))
     }
 }
 
@@ -379,12 +556,12 @@ extension NaviViewController: AMapNaviWalkManagerDelegate {
     }
 
     func walkManager(_ walkManager: AMapNaviWalkManager, playNaviSound soundString: String, soundStringType: AMapNaviSoundType) {
-        TTSController.shared.speak(soundString)
+        speakNaviText(soundString)
     }
 
     func walkManager(onArrivedDestination walkManager: AMapNaviWalkManager) {
         NavigationRuntimeState.shared.clearNavigating()
-        TTSController.shared.speak(L10n.t("navi.arrived"))
+        speakNaviText(L10n.t("navi.arrived"))
     }
 }
 
@@ -416,12 +593,12 @@ extension NaviViewController: AMapNaviRideManagerDelegate {
     }
 
     func rideManager(_ rideManager: AMapNaviRideManager, playNaviSound soundString: String, soundStringType: AMapNaviSoundType) {
-        TTSController.shared.speak(soundString)
+        speakNaviText(soundString)
     }
 
     func rideManager(onArrivedDestination rideManager: AMapNaviRideManager) {
         NavigationRuntimeState.shared.clearNavigating()
-        TTSController.shared.speak(L10n.t("navi.arrived"))
+        speakNaviText(L10n.t("navi.arrived"))
     }
 }
 

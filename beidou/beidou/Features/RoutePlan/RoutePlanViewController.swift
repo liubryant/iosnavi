@@ -32,6 +32,8 @@ final class RoutePlanViewController: UIViewController {
     private let backgroundView = WeatherAnimatedBackgroundView()
     private let startLabel = UILabel()
     private let destinationLabel = UILabel()
+    private let pageTitleLabel = UILabel()
+    private let closeButton = UIButton(type: .system)
     private let topWeatherIconView = UIImageView()
     private var modeButtons: [NaviMode: UIButton] = [:]
     private let feedAdContainer = UIView()
@@ -62,7 +64,6 @@ final class RoutePlanViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 0.92, green: 0.97, blue: 1.0, alpha: 1.0)
 
         setupWeatherBackground()
 
@@ -87,7 +88,14 @@ final class RoutePlanViewController: UIViewController {
 
         updateLabels()
         updateModeButtons()
+        applyInterfaceStyle()
         loadWeatherStyle()
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        guard previousTraitCollection?.userInterfaceStyle != traitCollection.userInterfaceStyle else { return }
+        applyInterfaceStyle()
     }
 
     private func setupWeatherBackground() {
@@ -119,7 +127,7 @@ final class RoutePlanViewController: UIViewController {
     // MARK: - 顶部返回按钮
 
     private func setupCloseButton() {
-        let button = UIButton(type: .system)
+        let button = closeButton
         var configuration = UIButton.Configuration.filled()
         configuration.image = UIImage(systemName: "chevron.left")
         configuration.baseForegroundColor = .white
@@ -138,17 +146,16 @@ final class RoutePlanViewController: UIViewController {
             button.heightAnchor.constraint(equalToConstant: 42)
         ])
 
-        let titleLabel = UILabel()
-        titleLabel.text = L10n.t("search.destination_satellite_title")
-        titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
-        titleLabel.textAlignment = .center
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(titleLabel)
+        pageTitleLabel.text = L10n.t("search.destination_satellite_title")
+        pageTitleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
+        pageTitleLabel.textAlignment = .center
+        pageTitleLabel.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(pageTitleLabel)
         NSLayoutConstraint.activate([
-            titleLabel.centerYAnchor.constraint(equalTo: button.centerYAnchor),
-            titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            titleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: button.trailingAnchor, constant: 8),
-            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: topWeatherIconView.leadingAnchor, constant: -8)
+            pageTitleLabel.centerYAnchor.constraint(equalTo: button.centerYAnchor),
+            pageTitleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            pageTitleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: button.trailingAnchor, constant: 8),
+            pageTitleLabel.trailingAnchor.constraint(lessThanOrEqualTo: topWeatherIconView.leadingAnchor, constant: -8)
         ])
     }
 
@@ -321,12 +328,43 @@ final class RoutePlanViewController: UIViewController {
     }
 
     private func updateModeButtons() {
+        let isDark = traitCollection.userInterfaceStyle == .dark
+        let normalBackground = isDark
+            ? UIColor(white: 0.10, alpha: 0.82)
+            : UIColor.systemGray5.withAlphaComponent(0.92)
+        let normalForeground = isDark
+            ? UIColor(white: 0.88, alpha: 1)
+            : UIColor(red: 0.30, green: 0.39, blue: 0.53, alpha: 1)
+
         for (mode, button) in modeButtons {
             let selected = mode == naviMode
-            button.backgroundColor = selected ? .systemBlue : .systemGray5
-            button.tintColor = selected ? .white : UIColor(red: 0.30, green: 0.39, blue: 0.53, alpha: 1)
-            button.setTitleColor(selected ? .white : UIColor(red: 0.30, green: 0.39, blue: 0.53, alpha: 1), for: .normal)
+            button.backgroundColor = selected ? .systemBlue : normalBackground
+            button.tintColor = selected ? .white : normalForeground
+            button.setTitleColor(selected ? .white : normalForeground, for: .normal)
+            if var configuration = button.configuration {
+                configuration.baseForegroundColor = selected ? .white : normalForeground
+                button.configuration = configuration
+            }
         }
+    }
+
+    private func applyInterfaceStyle() {
+        let isDark = traitCollection.userInterfaceStyle == .dark
+        view.backgroundColor = isDark
+            ? UIColor(red: 0.04, green: 0.06, blue: 0.09, alpha: 1)
+            : UIColor(red: 0.92, green: 0.97, blue: 1.0, alpha: 1.0)
+
+        pageTitleLabel.textColor = isDark ? UIColor(white: 0.96, alpha: 1) : .label
+        topWeatherIconView.tintColor = isDark ? UIColor(red: 1.0, green: 0.73, blue: 0.32, alpha: 1) : .systemOrange
+
+        var configuration = closeButton.configuration ?? UIButton.Configuration.filled()
+        configuration.baseForegroundColor = .white
+        configuration.baseBackgroundColor = isDark
+            ? UIColor(white: 1, alpha: 0.16)
+            : UIColor.black.withAlphaComponent(0.52)
+        closeButton.configuration = configuration
+
+        updateModeButtons()
     }
 
     // MARK: - 附近街景 / 开始导航

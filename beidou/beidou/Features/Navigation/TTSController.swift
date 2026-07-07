@@ -17,6 +17,7 @@ final class TTSController: NSObject {
 
     private let synthesizer = AVSpeechSynthesizer()
     private let voice = AVSpeechSynthesisVoice(language: "zh-CN")
+    private var isAudioSessionConfigured = false
 
     private override init() {
         super.init()
@@ -25,6 +26,7 @@ final class TTSController: NSObject {
     /// 播报一段文字 (按队列顺序播放，对应 Android wordList.addLast)
     func speak(_ text: String) {
         guard !text.isEmpty else { return }
+        configureAudioSessionIfNeeded()
         let utterance = AVSpeechUtterance(string: text)
         utterance.voice = voice
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
@@ -39,5 +41,22 @@ final class TTSController: NSObject {
 
     var isSpeaking: Bool {
         synthesizer.isSpeaking
+    }
+
+    private func configureAudioSessionIfNeeded() {
+        guard !isAudioSessionConfigured else { return }
+        do {
+            try AVAudioSession.sharedInstance().setCategory(
+                .playback,
+                mode: .default,
+                options: [.mixWithOthers]
+            )
+            try AVAudioSession.sharedInstance().setActive(true)
+            isAudioSessionConfigured = true
+        } catch {
+            #if DEBUG
+            print("TTS audio session configure failed: \(error)")
+            #endif
+        }
     }
 }

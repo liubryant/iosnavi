@@ -158,17 +158,23 @@ final class RootViewController: UIViewController {
 
     private func showHotSplash() {
         isShowingHotSplash = true
-        didStartSplashFlow = false
         PangleSplashAdManager.shared.resetSplashRequestState()
+        PangleSplashAdManager.shared.onClose = { [weak self] in
+            self?.isShowingHotSplash = false
+        }
 
         PangleAdManager.shared.initialize { [weak self] _ in
             DispatchQueue.main.async {
-                self?.showSplashIfNeeded()
+                self?.loadHotSplashAd()
             }
         }
+    }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-            self?.showSplashIfNeeded()
+    private func loadHotSplashAd() {
+        PangleSplashAdManager.shared.loadAndShowDefaultSplashAd { [weak self] success, _ in
+            if !success {
+                self?.isShowingHotSplash = false
+            }
         }
     }
 
