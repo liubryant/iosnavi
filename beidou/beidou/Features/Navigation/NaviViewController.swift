@@ -107,7 +107,6 @@ final class NaviViewController: UIViewController {
     private let brandOverlayView = UIView()
     private let brandNameLabel = UILabel()
     private var hasStartedNavigation = false
-    private var isShowingRouteFailureAlert = false
 
     #if canImport(AMapNaviKit)
     private var driveView: AMapNaviDriveView?
@@ -396,17 +395,8 @@ final class NaviViewController: UIViewController {
     }
 
     fileprivate func showRouteFailureAlert() {
-        guard !isShowingRouteFailureAlert else { return }
-        isShowingRouteFailureAlert = true
-        let alert = UIAlertController(title: nil, message: L10n.t("navi.route_failed"), preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: L10n.t("common.ok"), style: .default) { [weak self] _ in
-            guard let self else { return }
-            self.isShowingRouteFailureAlert = false
-            if !self.hasStartedNavigation {
-                self.tapClose()
-            }
-        })
-        present(alert, animated: true)
+        // 高德导航过程中可能回调补充路线规划失败，但 GPS 导航仍可继续工作。
+        // 产品侧不展示该提示，避免用户误点确认后退出导航。
     }
 
     fileprivate func showNaviSettings() {
@@ -514,7 +504,6 @@ extension NaviViewController: AMapNaviDriveManagerDelegate {
         if !hasStartedNavigation {
             NavigationRuntimeState.shared.clearNavigating()
         }
-        showRouteFailureAlert()
     }
 
     /// 语音播报文本回调 (对应 Android TTSController.onGetNavigationText)
@@ -552,7 +541,6 @@ extension NaviViewController: AMapNaviWalkManagerDelegate {
         if !hasStartedNavigation {
             NavigationRuntimeState.shared.clearNavigating()
         }
-        showRouteFailureAlert()
     }
 
     func walkManager(_ walkManager: AMapNaviWalkManager, playNaviSound soundString: String, soundStringType: AMapNaviSoundType) {
@@ -589,7 +577,6 @@ extension NaviViewController: AMapNaviRideManagerDelegate {
         if !hasStartedNavigation {
             NavigationRuntimeState.shared.clearNavigating()
         }
-        showRouteFailureAlert()
     }
 
     func rideManager(_ rideManager: AMapNaviRideManager, playNaviSound soundString: String, soundStringType: AMapNaviSoundType) {

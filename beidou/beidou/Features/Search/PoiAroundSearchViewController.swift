@@ -342,6 +342,7 @@ extension PoiAroundSearchViewController: UITableViewDataSource, UITableViewDeleg
         tableView.deselectRow(at: indexPath, animated: true)
         let poi = results[indexPath.row]
         let start = currentLocationPOI()
+        POIHistoryStore.save(poi)
         runAfterRewardAd { [weak self] in
             self?.navigationController?.pushViewController(
                 NaviViewController(start: start, end: poi, mode: .drive),

@@ -30,5 +30,6 @@ enum POIHistoryStore {
         }
         guard let data = try? JSONEncoder().encode(items) else { return }
         UserDefaults.standard.set(data, forKey: key)
+        AppShortcutManager.configureShortcutItems()
     }
 }

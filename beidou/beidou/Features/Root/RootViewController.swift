@@ -104,6 +104,18 @@ final class RootViewController: UIViewController {
             name: UIApplication.didBecomeActiveNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appShortcutNavigateLastDestination),
+            name: AppShortcutManager.navigateLastDestinationNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appShortcutCloudPanorama),
+            name: AppShortcutManager.cloudPanoramaNotification,
+            object: nil
+        )
     }
 
     @objc private func appDidEnterBackground() {
@@ -111,6 +123,8 @@ final class RootViewController: UIViewController {
     }
 
     @objc private func appDidBecomeActive() {
+        handlePendingShortcutIfPossible()
+
         guard SpUtil.bool(.agreementAccepted),
               let backgroundEnteredAt,
               Date().timeIntervalSince(backgroundEnteredAt) >= hotSplashMinimumBackgroundInterval,
@@ -127,6 +141,14 @@ final class RootViewController: UIViewController {
 
         self.backgroundEnteredAt = nil
         showHotSplash()
+    }
+
+    @objc private func appShortcutNavigateLastDestination() {
+        handlePendingShortcutIfPossible()
+    }
+
+    @objc private func appShortcutCloudPanorama() {
+        handlePendingShortcutIfPossible()
     }
 
     private var isNavigationProtectedFromHotSplash: Bool {
@@ -202,6 +224,75 @@ final class RootViewController: UIViewController {
         let nav = SwipeBackNavigationController(rootViewController: container)
         nav.setNavigationBarHidden(true, animated: false)
         switchTo(nav)
+        DispatchQueue.main.async { [weak self] in
+            self?.handlePendingShortcutIfPossible()
+        }
+    }
+
+    private func handlePendingShortcutIfPossible() {
+        guard AppShortcutManager.hasPendingNavigateLastDestination || AppShortcutManager.hasPendingCloudPanorama else { return }
+        guard SpUtil.bool(.agreementAccepted) else { return }
+        guard !(currentChild is AgreementViewController),
+              !(currentChild is SplashViewController),
+              !isShowingHotSplash else {
+            return
+        }
+
+        if let navigationController = currentChild as? UINavigationController {
+            if AppShortcutManager.hasPendingCloudPanorama {
+                AppShortcutManager.consumePendingCloudPanorama()
+                pushCloudPanorama(on: navigationController)
+                return
+            }
+
+            guard let destination = POIHistoryStore.load().first else {
+                AppShortcutManager.consumePendingNavigateLastDestination()
+                AppShortcutManager.configureShortcutItems()
+                return
+            }
+            AppShortcutManager.consumePendingNavigateLastDestination()
+            pushLastDestinationNavigation(on: navigationController, destination: destination)
+        }
+    }
+
+    private func pushCloudPanorama(on navigationController: UINavigationController) {
+        var viewControllers = navigationController.viewControllers.filter {
+            !($0 is CloudPanoramaListViewController) && !($0 is CloudPanoramaWebViewController)
+        }
+        if viewControllers.isEmpty {
+            viewControllers = navigationController.viewControllers
+        }
+        viewControllers.append(CloudPanoramaListViewController())
+        navigationController.setViewControllers(viewControllers, animated: true)
+    }
+
+    private func pushLastDestinationNavigation(on navigationController: UINavigationController, destination: SelectedPOI) {
+        NavigationRuntimeState.shared.clearNavigating()
+        let start = currentLocationPOI()
+        let naviVC = NaviViewController(start: start, end: destination, mode: .drive)
+        var viewControllers = navigationController.viewControllers.filter { !($0 is NaviViewController) }
+        if viewControllers.isEmpty {
+            viewControllers = navigationController.viewControllers
+        }
+        viewControllers.append(naviVC)
+        navigationController.setViewControllers(viewControllers, animated: true)
+    }
+
+    private func currentLocationPOI() -> SelectedPOI {
+        if let cached = LocationManager.shared.lastKnownLocation {
+            return SelectedPOI(
+                name: L10n.t("common.my_location"),
+                address: cached.address,
+                latitude: cached.latitude,
+                longitude: cached.longitude
+            )
+        }
+        return SelectedPOI(
+            name: L10n.t("common.my_location"),
+            address: "",
+            latitude: Constants.defaultStartLat,
+            longitude: Constants.defaultStartLon
+        )
     }
 
     // MARK: - 子控制器切换
