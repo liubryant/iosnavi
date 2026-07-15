@@ -23,7 +23,8 @@
 "home.search_placeholder" = "请输入终点";
 "home.cloud_panorama" = "720云";
 "home.bottom_label" = "卫星定位导航系统";
-"home.coordinate_format" = "%@\n纬度：%.6f\n经度：%.6f";
+"home.coordinate_format" = "%@\n纬度：%.6f\n经度：%.6f\n海拔：%@";
+"home.altitude_value_format" = "%.1f 米";
 
 "menu.panorama" = "全景/街景";
 "menu.weather" = "天气查询";
@@ -71,6 +72,7 @@
 
 "weather.title" = "天气查询";
 "weather.typhoon_title" = "台风路径";
+"weather.typhoon_monitor_title" = "台风监测";
 "weather.forecast_title" = "未来天气预报";
 "weather.no_forecast" = "暂无预报数据";
 "weather.check_capability" = "请检查网络连接后重试";

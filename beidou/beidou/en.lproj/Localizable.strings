@@ -23,7 +23,8 @@
 "home.search_placeholder" = "Enter destination";
 "home.cloud_panorama" = "720 Cloud";
 "home.bottom_label" = "Satellite Navigation System";
-"home.coordinate_format" = "%@\nLatitude: %.6f\nLongitude: %.6f";
+"home.coordinate_format" = "%@\nLatitude: %.6f\nLongitude: %.6f\nAltitude: %@";
+"home.altitude_value_format" = "%.1f m";
 
 "menu.panorama" = "Panorama / Street View";
 "menu.weather" = "Weather";
@@ -71,6 +72,7 @@
 
 "weather.title" = "Weather";
 "weather.typhoon_title" = "Typhoon Track";
+"weather.typhoon_monitor_title" = "Typhoon Monitor";
 "weather.forecast_title" = "Forecast";
 "weather.no_forecast" = "No forecast data";
 "weather.check_capability" = "Please check your network connection and try again";

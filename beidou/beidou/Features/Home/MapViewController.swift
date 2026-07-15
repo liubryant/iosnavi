@@ -430,11 +430,13 @@ final class MapViewController: UIViewController {
 
     private func displayLocation(for location: CurrentLocation) -> String {
         let address = location.address.isEmpty ? location.city : location.address
+        let altitudeText = location.altitude.map { L10n.f("home.altitude_value_format", $0) } ?? "--"
         return String(
             format: L10n.t("home.coordinate_format"),
             address,
             location.latitude,
-            location.longitude
+            location.longitude,
+            altitudeText
         )
     }
 
@@ -492,7 +494,7 @@ final class MapViewController: UIViewController {
 
     @objc private func tapTyphoon() {
         guard let url = URL(string: UrlConstants.typhoonPath) else { return }
-        let controller = WebViewController(title: L10n.t("weather.typhoon_title"), content: .remoteURL(url), fullScreen: true)
+        let controller = WebViewController(title: L10n.t("weather.typhoon_monitor_title"), content: .remoteURL(url), fullScreen: true)
         controller.modalPresentationStyle = .fullScreen
         controller.modalPresentationCapturesStatusBarAppearance = true
         controller.modalTransitionStyle = .crossDissolve

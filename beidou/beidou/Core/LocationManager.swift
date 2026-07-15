@@ -17,6 +17,8 @@ import AMapLocationKit
 struct CurrentLocation {
     let latitude: Double
     let longitude: Double
+    /// 海拔高度，单位米。CoreLocation 在 verticalAccuracy 无效时不展示。
+    let altitude: Double?
     /// 当前城市 (用于天气/POI接口)
     let city: String
     /// 行政区划编码 (用于高德天气 Web API)
@@ -92,9 +94,11 @@ final class LocationManager: NSObject {
             let city = reGeocode?.city?.isEmpty == false ? (reGeocode?.city ?? Constants.city) : Constants.city
             let adcode = reGeocode?.adcode?.isEmpty == false ? reGeocode?.adcode : nil
             let address = reGeocode?.formattedAddress ?? ""
+            let altitude = location.verticalAccuracy >= 0 ? location.altitude : nil
             let result = CurrentLocation(
                 latitude: location.coordinate.latitude,
                 longitude: location.coordinate.longitude,
+                altitude: altitude,
                 city: city,
                 adcode: adcode,
                 address: address
@@ -131,6 +135,11 @@ final class LocationManager: NSObject {
     private static func cache(_ location: CurrentLocation) {
         SpUtil.setDouble(location.latitude, for: .lastLatitude)
         SpUtil.setDouble(location.longitude, for: .lastLongitude)
+        if let altitude = location.altitude {
+            SpUtil.setDouble(altitude, for: .lastAltitude)
+        } else {
+            SpUtil.remove(.lastAltitude)
+        }
         SpUtil.setString(location.city, for: .lastCity)
         SpUtil.setString(location.adcode ?? "", for: .lastAdcode)
         SpUtil.setString(location.address, for: .lastAddress)
@@ -145,6 +154,7 @@ final class LocationManager: NSObject {
         return CurrentLocation(
             latitude: lat,
             longitude: lon,
+            altitude: SpUtil.optionalDouble(.lastAltitude),
             city: SpUtil.string(.lastCity, default: Constants.city),
             adcode: {
                 let value = SpUtil.string(.lastAdcode)

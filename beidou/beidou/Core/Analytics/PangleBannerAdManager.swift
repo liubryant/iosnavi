@@ -23,6 +23,7 @@ final class PangleBannerAdManager: NSObject {
     private var bannerView: BUNativeExpressBannerView?
     private weak var containerView: UIView?
     private weak var rootViewController: UIViewController?
+    private var didRequestAdThisLaunch = false
     #endif
 
     private override init() {
@@ -59,6 +60,13 @@ final class PangleBannerAdManager: NSObject {
         let width = container.bounds.width > 0 ? container.bounds.width : UIScreen.main.bounds.width - 24
         guard width > 0, container.window != nil else { return }
 
+        if didRequestAdThisLaunch {
+            if let bannerView {
+                attachExistingBanner(bannerView, to: container, rootViewController: rootViewController)
+            }
+            return
+        }
+
         container.subviews.forEach { $0.removeFromSuperview() }
         containerView = container
         self.rootViewController = rootViewController
@@ -75,10 +83,24 @@ final class PangleBannerAdManager: NSObject {
         banner.frame = container.bounds
         banner.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         container.addSubview(banner)
+        didRequestAdThisLaunch = true
         banner.loadAdData()
         bannerView = banner
         #endif
     }
+
+    #if canImport(BUAdSDK)
+    private func attachExistingBanner(_ banner: BUNativeExpressBannerView, to container: UIView, rootViewController: UIViewController) {
+        guard banner.superview !== container else { return }
+        container.subviews.forEach { $0.removeFromSuperview() }
+        containerView = container
+        self.rootViewController = rootViewController
+        banner.removeFromSuperview()
+        banner.frame = container.bounds
+        banner.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        container.addSubview(banner)
+    }
+    #endif
 }
 
 #if canImport(BUAdSDK)

@@ -743,6 +743,7 @@ final class WeatherViewController: UIViewController {
         return CurrentLocation(
             latitude: Constants.defaultStartLat,
             longitude: Constants.defaultStartLon,
+            altitude: nil,
             city: L10n.t("city.beijing"),
             adcode: "110000",
             address: ""

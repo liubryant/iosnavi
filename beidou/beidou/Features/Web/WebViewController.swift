@@ -48,6 +48,7 @@ final class WebViewController: UIViewController {
     private var textView: UITextView?
     private var webView: WKWebView?
     private let backButton = UIButton(type: .system)
+    private let fullScreenTitleLabel = UILabel()
     private let statusBarBackgroundView = UIView()
     private var previousNavigationBarHidden = false
 
@@ -66,7 +67,7 @@ final class WebViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = fullScreen ? .black : .systemBackground
+        view.backgroundColor = .systemBackground
 
         switch content {
         case .localText(let resourceName):
@@ -147,8 +148,8 @@ final class WebViewController: UIViewController {
         }
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.isOpaque = false
-        webView.backgroundColor = fullScreen ? .black : .systemBackground
-        webView.scrollView.backgroundColor = fullScreen ? .black : .systemBackground
+        webView.backgroundColor = .systemBackground
+        webView.scrollView.backgroundColor = .systemBackground
         webView.scrollView.contentInsetAdjustmentBehavior = fullScreen ? .never : .automatic
         if mobileOptimized {
             webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
@@ -170,6 +171,7 @@ final class WebViewController: UIViewController {
         self.webView = webView
         if fullScreen {
             setupFullScreenBackButton()
+            setupFullScreenTitle()
         }
     }
 
@@ -203,6 +205,22 @@ final class WebViewController: UIViewController {
             backButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
             backButton.widthAnchor.constraint(equalToConstant: 42),
             backButton.heightAnchor.constraint(equalToConstant: 42)
+        ])
+    }
+
+    private func setupFullScreenTitle() {
+        fullScreenTitleLabel.text = title
+        fullScreenTitleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
+        fullScreenTitleLabel.textColor = .label
+        fullScreenTitleLabel.textAlignment = .center
+        fullScreenTitleLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        view.addSubview(fullScreenTitleLabel)
+        NSLayoutConstraint.activate([
+            fullScreenTitleLabel.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
+            fullScreenTitleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            fullScreenTitleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: backButton.trailingAnchor, constant: 8),
+            fullScreenTitleLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -64)
         ])
     }
 

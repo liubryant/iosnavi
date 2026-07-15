@@ -107,6 +107,7 @@ final class NaviViewController: UIViewController {
     private let brandOverlayView = UIView()
     private let brandNameLabel = UILabel()
     private var hasStartedNavigation = false
+    private var nightModeRefreshTimer: Timer?
 
     #if canImport(AMapNaviKit)
     private var driveView: AMapNaviDriveView?
@@ -133,6 +134,7 @@ final class NaviViewController: UIViewController {
         setupNaviView()
         setupOverlay()
         applyInterfaceStyle()
+        scheduleNightModeRefresh()
         startCalculateRoute()
     }
 
@@ -145,14 +147,19 @@ final class NaviViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         UMengAnalytics.shared.pageBegin("NaviViewController")
+        applyInterfaceStyle()
+        scheduleNightModeRefresh()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         UMengAnalytics.shared.pageEnd("NaviViewController")
+        nightModeRefreshTimer?.invalidate()
+        nightModeRefreshTimer = nil
     }
 
     deinit {
+        nightModeRefreshTimer?.invalidate()
         NavigationRuntimeState.shared.clearNavigating()
         #if canImport(AMapNaviKit)
         switch mode {
@@ -243,12 +250,12 @@ final class NaviViewController: UIViewController {
         view.addSubview(closeButton)
         setupBrandOverlay()
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 6),
+            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 2),
             titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             titleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 64),
             titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -64),
 
-            closeButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
+            closeButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor, constant: 8),
             closeButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             closeButton.widthAnchor.constraint(equalToConstant: 30),
             closeButton.heightAnchor.constraint(equalToConstant: 30)
@@ -300,7 +307,8 @@ final class NaviViewController: UIViewController {
     }
 
     private func applyInterfaceStyle() {
-        let isDark = traitCollection.userInterfaceStyle == .dark
+        let isDark = shouldUseNavigationNightMode()
+        overrideUserInterfaceStyle = isDark ? .dark : .light
         view.backgroundColor = isDark ? .black : .systemBackground
         titleLabel.textColor = .white
         closeButton.tintColor = .white
@@ -318,6 +326,59 @@ final class NaviViewController: UIViewController {
         walkView?.mapViewModeType = mapMode
         rideView?.mapViewModeType = mapMode
         #endif
+    }
+
+    private func shouldUseNavigationNightMode(now: Date = Date()) -> Bool {
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.hour, .minute], from: now)
+        let hour = components.hour ?? 0
+        let minute = components.minute ?? 0
+        let minutesSinceMidnight = hour * 60 + minute
+        let nightStartMinutes = 18 * 60 + 50
+        let nightEndMinutes = 6 * 60
+
+        return minutesSinceMidnight >= nightStartMinutes || minutesSinceMidnight < nightEndMinutes
+    }
+
+    private func scheduleNightModeRefresh() {
+        nightModeRefreshTimer?.invalidate()
+
+        let calendar = Calendar.current
+        let now = Date()
+        let components = calendar.dateComponents([.hour, .minute], from: now)
+        let hour = components.hour ?? 0
+        let minute = components.minute ?? 0
+        let minutesSinceMidnight = hour * 60 + minute
+        let nightStartMinutes = 18 * 60 + 50
+        let nightEndMinutes = 6 * 60
+
+        let nextTransition: Date?
+        if minutesSinceMidnight < nightEndMinutes {
+            nextTransition = calendar.date(bySettingHour: 6, minute: 0, second: 0, of: now)
+        } else if minutesSinceMidnight < nightStartMinutes {
+            nextTransition = calendar.date(bySettingHour: 18, minute: 50, second: 0, of: now)
+        } else if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) {
+            nextTransition = calendar.date(bySettingHour: 6, minute: 0, second: 0, of: tomorrow)
+        } else {
+            nextTransition = nil
+        }
+
+        guard let nextTransition else { return }
+        nightModeRefreshTimer = Timer(
+            fire: nextTransition,
+            interval: 0,
+            repeats: false
+        ) { [weak self] _ in
+            self?.handleNightModeRefreshTimer()
+        }
+        if let nightModeRefreshTimer {
+            RunLoop.main.add(nightModeRefreshTimer, forMode: .common)
+        }
+    }
+
+    private func handleNightModeRefreshTimer() {
+        applyInterfaceStyle()
+        scheduleNightModeRefresh()
     }
 
     // MARK: - 路线计算 (对应 BaseActivity 默认坐标 + xxxRouteCalculateActivity.calculateXxxRoute)

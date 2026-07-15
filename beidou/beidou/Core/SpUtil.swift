@@ -17,6 +17,8 @@ enum SpUtil {
         case lastLatitude = "last_latitude"
         /// 上次定位经度
         case lastLongitude = "last_longitude"
+        /// 上次定位海拔
+        case lastAltitude = "last_altitude"
         /// 上次定位城市
         case lastCity = "last_city"
         /// 上次定位行政区划编码
@@ -57,6 +59,15 @@ enum SpUtil {
 
     static func setDouble(_ value: Double, for key: Key) {
         defaults.set(value, forKey: key.rawValue)
+    }
+
+    static func optionalDouble(_ key: Key) -> Double? {
+        guard defaults.object(forKey: key.rawValue) != nil else { return nil }
+        return defaults.double(forKey: key.rawValue)
+    }
+
+    static func remove(_ key: Key) {
+        defaults.removeObject(forKey: key.rawValue)
     }
 
     static func string(_ key: Key, default defaultValue: String = "") -> String {

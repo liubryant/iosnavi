@@ -21,7 +21,6 @@ final class RoutePlanViewController: UIViewController {
     private var routeSwapped = false
     private var naviMode: NaviMode = .drive
     private var didLoadFeedAd = false
-    private var feedAdHeightConstraint: NSLayoutConstraint?
     #if canImport(AMapSearchKit)
     private let searchAPI = AMapSearchAPI()
     private var weatherCandidates: [String] = []
@@ -74,16 +73,29 @@ final class RoutePlanViewController: UIViewController {
         let actionRow = setupActionButtons()
         setupFeedAdContainer()
 
-        let stack = UIStackView(arrangedSubviews: [card, modeRow, actionRow])
+        let scrollView = UIScrollView()
+        scrollView.alwaysBounceVertical = true
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(scrollView)
+
+        let stack = UIStackView(arrangedSubviews: [card, modeRow, actionRow, feedAdContainer])
         stack.axis = .vertical
         stack.spacing = 14
         stack.translatesAutoresizingMaskIntoConstraints = false
         stack.setCustomSpacing(22, after: modeRow)
-        view.addSubview(stack)
+        stack.setCustomSpacing(30, after: actionRow)
+        scrollView.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 62),
-            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16)
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 62),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            stack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            stack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor, constant: -16),
+            stack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -24),
+            stack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -32)
         ])
 
         updateLabels()
@@ -403,16 +415,12 @@ final class RoutePlanViewController: UIViewController {
 
     private func setupFeedAdContainer() {
         feedAdContainer.translatesAutoresizingMaskIntoConstraints = false
+        feedAdContainer.backgroundColor = .secondarySystemGroupedBackground
+        feedAdContainer.layer.cornerRadius = 12
+        feedAdContainer.layer.cornerCurve = .continuous
+        feedAdContainer.clipsToBounds = true
         feedAdContainer.isHidden = !Constants.isInlineTemplateAdEnabled
-        view.addSubview(feedAdContainer)
-        let height = feedAdContainer.heightAnchor.constraint(equalToConstant: Constants.isInlineTemplateAdEnabled ? 250 : 0)
-        feedAdHeightConstraint = height
-        NSLayoutConstraint.activate([
-            feedAdContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
-            feedAdContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
-            feedAdContainer.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
-            height
-        ])
+        feedAdContainer.heightAnchor.constraint(equalToConstant: Constants.isInlineTemplateAdEnabled ? 250 : 0).isActive = true
     }
 
     private func loadFeedAdIfNeeded() {
