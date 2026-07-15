@@ -74,6 +74,7 @@ final class RootViewController: UIViewController {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
                 self?.showSplashIfNeeded()
             }
+            CloudPanoramaNotificationManager.shared.requestAuthorizationAndScheduleIfNeeded()
         }
     }
 
@@ -116,6 +117,12 @@ final class RootViewController: UIViewController {
             name: AppShortcutManager.cloudPanoramaNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(cloudPanoramaNotificationOpenScenic),
+            name: CloudPanoramaNotificationManager.openScenicNotification,
+            object: nil
+        )
     }
 
     @objc private func appDidEnterBackground() {
@@ -124,6 +131,7 @@ final class RootViewController: UIViewController {
 
     @objc private func appDidBecomeActive() {
         handlePendingShortcutIfPossible()
+        handlePendingCloudPanoramaNotificationIfPossible()
 
         guard SpUtil.bool(.agreementAccepted),
               let backgroundEnteredAt,
@@ -149,6 +157,10 @@ final class RootViewController: UIViewController {
 
     @objc private func appShortcutCloudPanorama() {
         handlePendingShortcutIfPossible()
+    }
+
+    @objc private func cloudPanoramaNotificationOpenScenic() {
+        handlePendingCloudPanoramaNotificationIfPossible()
     }
 
     private var isNavigationProtectedFromHotSplash: Bool {
@@ -226,7 +238,24 @@ final class RootViewController: UIViewController {
         switchTo(nav)
         DispatchQueue.main.async { [weak self] in
             self?.handlePendingShortcutIfPossible()
+            self?.handlePendingCloudPanoramaNotificationIfPossible()
         }
+    }
+
+    private func handlePendingCloudPanoramaNotificationIfPossible() {
+        guard SpUtil.bool(.agreementAccepted) else { return }
+        guard !(currentChild is AgreementViewController),
+              !(currentChild is SplashViewController),
+              !isShowingHotSplash else {
+            return
+        }
+        guard let navigationController = currentChild as? UINavigationController,
+              let scenicID = CloudPanoramaNotificationManager.shared.consumePendingScenicID(),
+              let item = CloudScenicItem.all.first(where: { $0.id == scenicID }) else {
+            return
+        }
+
+        pushCloudPanoramaScenic(item, on: navigationController)
     }
 
     private func handlePendingShortcutIfPossible() {
@@ -263,6 +292,17 @@ final class RootViewController: UIViewController {
             viewControllers = navigationController.viewControllers
         }
         viewControllers.append(CloudPanoramaListViewController())
+        navigationController.setViewControllers(viewControllers, animated: true)
+    }
+
+    private func pushCloudPanoramaScenic(_ item: CloudScenicItem, on navigationController: UINavigationController) {
+        var viewControllers = navigationController.viewControllers.filter {
+            !($0 is CloudPanoramaListViewController) && !($0 is CloudPanoramaWebViewController)
+        }
+        if viewControllers.isEmpty {
+            viewControllers = navigationController.viewControllers
+        }
+        viewControllers.append(CloudPanoramaWebViewController(title: item.title, url: item.url))
         navigationController.setViewControllers(viewControllers, animated: true)
     }
 

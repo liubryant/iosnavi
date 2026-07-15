@@ -16,6 +16,17 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UINavigationBar.appearance().tintColor = .systemBlue
+        let titleColor = UIColor { traitCollection in
+            traitCollection.userInterfaceStyle == .dark ? .black : .label
+        }
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithDefaultBackground()
+        appearance.titleTextAttributes = [.foregroundColor: titleColor]
+        appearance.largeTitleTextAttributes = [.foregroundColor: titleColor]
+        UINavigationBar.appearance().standardAppearance = appearance
+        UINavigationBar.appearance().scrollEdgeAppearance = appearance
+        UINavigationBar.appearance().compactAppearance = appearance
+        CloudPanoramaNotificationManager.shared.configure()
         AppShortcutManager.configureShortcutItems()
         if let shortcutItem = launchOptions?[.shortcutItem] as? UIApplicationShortcutItem {
             AppShortcutManager.handle(shortcutItem)

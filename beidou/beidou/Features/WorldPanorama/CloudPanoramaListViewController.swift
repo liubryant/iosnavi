@@ -57,6 +57,12 @@ final class CloudPanoramaListViewController: UIViewController {
         UMengAnalytics.shared.pageEnd("CloudPanoramaListViewController")
     }
 
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        guard previousTraitCollection?.userInterfaceStyle != traitCollection.userInterfaceStyle else { return }
+        applyHeaderTitleStyle()
+    }
+
     private func setupHeader() {
         var backConfig = UIButton.Configuration.filled()
         backConfig.image = UIImage(systemName: "chevron.left")
@@ -122,6 +128,11 @@ final class CloudPanoramaListViewController: UIViewController {
             categoryStackView.trailingAnchor.constraint(equalTo: categoryScrollView.trailingAnchor, constant: -16),
             categoryStackView.heightAnchor.constraint(equalTo: categoryScrollView.heightAnchor, constant: -10)
         ])
+        applyHeaderTitleStyle()
+    }
+
+    private func applyHeaderTitleStyle() {
+        titleLabel.textColor = traitCollection.userInterfaceStyle == .dark ? .black : .label
     }
 
     private func setupCollectionView() {

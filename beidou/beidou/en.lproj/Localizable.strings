@@ -21,7 +21,9 @@
 "agreement.exit_app" = "Exit App";
 
 "home.search_placeholder" = "Enter destination";
+"home.search_here" = "Search Here";
 "home.cloud_panorama" = "720 Cloud";
+"home.sunset_glow" = "Sunset";
 "home.bottom_label" = "Satellite Navigation System";
 "home.coordinate_format" = "%@\nLatitude: %.6f\nLongitude: %.6f\nAltitude: %@";
 "home.altitude_value_format" = "%.1f m";
@@ -73,6 +75,7 @@
 "weather.title" = "Weather";
 "weather.typhoon_title" = "Typhoon Track";
 "weather.typhoon_monitor_title" = "Typhoon Monitor";
+"weather.altitude_format" = "Alt %@";
 "weather.forecast_title" = "Forecast";
 "weather.no_forecast" = "No forecast data";
 "weather.check_capability" = "Please check your network connection and try again";

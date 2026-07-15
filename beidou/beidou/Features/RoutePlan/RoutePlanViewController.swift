@@ -37,10 +37,12 @@ final class RoutePlanViewController: UIViewController {
     private var modeButtons: [NaviMode: UIButton] = [:]
     private let feedAdContainer = UIView()
 
-    init(startLocation: CurrentLocation? = nil, endLocation: CurrentLocation? = nil) {
+    init(startLocation: CurrentLocation? = nil, endLocation: CurrentLocation? = nil, destinationPOI: SelectedPOI? = nil) {
         self.startLocation = startLocation
         super.init(nibName: nil, bundle: nil)
-        if let endLocation {
+        if let destinationPOI {
+            self.destinationPOI = destinationPOI
+        } else if let endLocation {
             self.destinationPOI = SelectedPOI(
                 name: endLocation.address.isEmpty ? endLocation.city : endLocation.address,
                 address: endLocation.address,
@@ -366,7 +368,7 @@ final class RoutePlanViewController: UIViewController {
             ? UIColor(red: 0.04, green: 0.06, blue: 0.09, alpha: 1)
             : UIColor(red: 0.92, green: 0.97, blue: 1.0, alpha: 1.0)
 
-        pageTitleLabel.textColor = isDark ? UIColor(white: 0.96, alpha: 1) : .label
+        pageTitleLabel.textColor = isDark ? .black : .label
         topWeatherIconView.tintColor = isDark ? UIColor(red: 1.0, green: 0.73, blue: 0.32, alpha: 1) : .systemOrange
 
         var configuration = closeButton.configuration ?? UIButton.Configuration.filled()

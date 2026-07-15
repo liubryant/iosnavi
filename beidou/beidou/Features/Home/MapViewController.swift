@@ -39,6 +39,24 @@ final class MapViewController: UIViewController {
     private let bottomLabel = UILabel()
     private let trafficButton = UIButton(type: .system)
     private let northButton = UIButton(type: .system)
+    private let bottomSearchSheet = UIView()
+    private let bottomSheetBlurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
+    private let bottomSheetMaterialOverlay = UIView()
+    private let bottomSheetGrabber = UIView()
+    private let bottomSheetSearchRow = UIView()
+    private let bottomSheetSearchTextLabel = UILabel()
+    private let bottomSheetAppIconContainer = UIView()
+    private let bottomSheetAppIconView = UIImageView()
+    private let bottomSheetWeatherBadge = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+    private let bottomSheetWeatherIconView = UIImageView()
+    private let bottomSheetTemperatureLabel = UILabel()
+    private let bottomSheetHistoryStack = UIStackView()
+    private let bottomSheetShortcutStack = UIStackView()
+    private var bottomSheetHeightConstraint: NSLayoutConstraint?
+    private var isBottomSheetExpanded = false
+    private var isDraggingBottomSheet = false
+    private var bottomSheetHistorySignature: String?
+    private var lastBottomSheetWeatherCity: String?
 
     private var currentMapType: MapDisplayType = .satellite
     private var currentLocation: CurrentLocation?
@@ -67,6 +85,7 @@ final class MapViewController: UIViewController {
         setupRightButtons()
         setupLeftButtons()
         setupBottomLabel()
+        setupBottomSearchSheet()
 
         applyMapType(.satellite)
         refreshLocation(shouldCenterMap: true)
@@ -79,6 +98,8 @@ final class MapViewController: UIViewController {
         mapView.viewWillAppear()
         #endif
         UMengAnalytics.shared.pageBegin("MapViewController")
+        reloadBottomSheetHistory()
+        applyCachedBottomSheetWeather()
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -86,6 +107,12 @@ final class MapViewController: UIViewController {
         refreshLocationOnColdStartIfNeeded()
         scheduleCloudPanoramaWelcomeIfNeeded()
         ReviewPromptManager.requestSystemReviewIfEligibleAfterCloudScenes(in: self)
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        guard !isDraggingBottomSheet else { return }
+        bottomSheetHeightConstraint?.constant = isBottomSheetExpanded ? bottomSheetExpandedHeight : bottomSheetCollapsedHeight
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -275,7 +302,7 @@ final class MapViewController: UIViewController {
         configuration.imagePadding = 4
         configuration.cornerStyle = .capsule
         configuration.baseBackgroundColor = .systemBackground
-        configuration.baseForegroundColor = .label
+        configuration.baseForegroundColor = UIColor.label.withAlphaComponent(0.78)
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8)
         configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 12, weight: .medium)
         configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
@@ -339,6 +366,7 @@ final class MapViewController: UIViewController {
 
     private func setupBottomLabel() {
         bottomLabel.text = L10n.t("home.bottom_label")
+        bottomLabel.isHidden = true
         bottomLabel.font = .systemFont(ofSize: 12)
         bottomLabel.textColor = UIColor(red: 0.10, green: 0.10, blue: 0.10, alpha: 1)
         bottomLabel.backgroundColor = UIColor.white.withAlphaComponent(0.94)
@@ -351,6 +379,339 @@ final class MapViewController: UIViewController {
             bottomLabel.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             bottomLabel.heightAnchor.constraint(equalToConstant: 40)
         ])
+    }
+
+    // MARK: - 底部搜索抽屉
+
+    private func setupBottomSearchSheet() {
+        bottomSearchSheet.backgroundColor = .clear
+        bottomSearchSheet.layer.cornerRadius = 22
+        bottomSearchSheet.layer.cornerCurve = .continuous
+        applyShadow(to: bottomSearchSheet)
+        bottomSearchSheet.translatesAutoresizingMaskIntoConstraints = false
+
+        bottomSheetBlurView.layer.cornerRadius = 22
+        bottomSheetBlurView.layer.cornerCurve = .continuous
+        bottomSheetBlurView.clipsToBounds = true
+        bottomSheetBlurView.alpha = 0.92
+        bottomSheetBlurView.translatesAutoresizingMaskIntoConstraints = false
+
+        bottomSheetMaterialOverlay.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.10)
+        bottomSheetMaterialOverlay.layer.cornerRadius = 22
+        bottomSheetMaterialOverlay.layer.cornerCurve = .continuous
+        bottomSheetMaterialOverlay.clipsToBounds = true
+        bottomSheetMaterialOverlay.translatesAutoresizingMaskIntoConstraints = false
+        bottomSheetMaterialOverlay.isUserInteractionEnabled = false
+
+        bottomSheetGrabber.backgroundColor = UIColor.systemGray.withAlphaComponent(0.95)
+        bottomSheetGrabber.layer.cornerRadius = 2
+        bottomSheetGrabber.translatesAutoresizingMaskIntoConstraints = false
+
+        bottomSheetSearchRow.backgroundColor = UIColor.secondarySystemGroupedBackground.withAlphaComponent(0.68)
+        bottomSheetSearchRow.layer.cornerRadius = 18
+        bottomSheetSearchRow.layer.cornerCurve = .continuous
+        bottomSheetSearchRow.layer.borderWidth = 0.5
+        bottomSheetSearchRow.layer.borderColor = UIColor.white.withAlphaComponent(0.45).cgColor
+        bottomSheetSearchRow.translatesAutoresizingMaskIntoConstraints = false
+        bottomSheetSearchRow.isUserInteractionEnabled = true
+        bottomSheetSearchRow.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapBottomSearchRow)))
+
+        let searchIcon = UIImageView(image: UIImage(systemName: "magnifyingglass"))
+        searchIcon.tintColor = .secondaryLabel
+        searchIcon.contentMode = .scaleAspectFit
+        searchIcon.translatesAutoresizingMaskIntoConstraints = false
+
+        bottomSheetSearchTextLabel.text = bottomSheetSearchTitle()
+        bottomSheetSearchTextLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+        bottomSheetSearchTextLabel.textColor = .secondaryLabel
+        bottomSheetSearchTextLabel.lineBreakMode = .byTruncatingTail
+        bottomSheetSearchTextLabel.numberOfLines = 1
+        bottomSheetSearchTextLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        bottomSheetSearchTextLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        bottomSheetAppIconContainer.backgroundColor = .clear
+        bottomSheetAppIconContainer.layer.cornerRadius = 18
+        bottomSheetAppIconContainer.layer.cornerCurve = .continuous
+        bottomSheetAppIconContainer.layer.borderWidth = 0
+        bottomSheetAppIconContainer.layer.borderColor = nil
+        bottomSheetAppIconContainer.translatesAutoresizingMaskIntoConstraints = false
+
+        bottomSheetAppIconView.image = UIImage(named: "AppLogo") ?? UIImage(named: "AppIcon") ?? UIImage(systemName: "location.north.circle.fill")
+        bottomSheetAppIconView.contentMode = .scaleAspectFit
+        bottomSheetAppIconView.clipsToBounds = true
+        bottomSheetAppIconView.layer.cornerRadius = 10
+        bottomSheetAppIconView.layer.cornerCurve = .continuous
+        bottomSheetAppIconView.translatesAutoresizingMaskIntoConstraints = false
+
+        bottomSheetWeatherBadge.layer.cornerRadius = 16
+        bottomSheetWeatherBadge.layer.cornerCurve = .continuous
+        bottomSheetWeatherBadge.clipsToBounds = true
+        bottomSheetWeatherBadge.alpha = 0.96
+        bottomSheetWeatherBadge.translatesAutoresizingMaskIntoConstraints = false
+
+        bottomSheetWeatherIconView.image = UIImage(systemName: "cloud.sun.fill")
+        bottomSheetWeatherIconView.tintColor = .systemOrange
+        bottomSheetWeatherIconView.contentMode = .scaleAspectFit
+        bottomSheetWeatherIconView.setContentCompressionResistancePriority(.required, for: .horizontal)
+        bottomSheetWeatherIconView.translatesAutoresizingMaskIntoConstraints = false
+
+        bottomSheetTemperatureLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+        bottomSheetTemperatureLabel.text = "--°"
+        bottomSheetTemperatureLabel.textColor = .label
+        bottomSheetTemperatureLabel.textAlignment = .right
+        bottomSheetTemperatureLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        bottomSheetTemperatureLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        bottomSheetSearchRow.addSubview(searchIcon)
+        bottomSheetSearchRow.addSubview(bottomSheetSearchTextLabel)
+        bottomSheetAppIconContainer.addSubview(bottomSheetAppIconView)
+        bottomSheetWeatherBadge.contentView.addSubview(bottomSheetWeatherIconView)
+        bottomSheetWeatherBadge.contentView.addSubview(bottomSheetTemperatureLabel)
+
+        bottomSheetHistoryStack.axis = .vertical
+        bottomSheetHistoryStack.spacing = 0
+        bottomSheetHistoryStack.translatesAutoresizingMaskIntoConstraints = false
+
+        bottomSheetShortcutStack.axis = .horizontal
+        bottomSheetShortcutStack.distribution = .fillEqually
+        bottomSheetShortcutStack.spacing = 12
+        bottomSheetShortcutStack.translatesAutoresizingMaskIntoConstraints = false
+
+        let cloudShortcut = makeBottomSheetShortcut(
+            icon: "photo.on.rectangle.angled",
+            title: L10n.t("home.cloud_panorama"),
+            colors: [
+                UIColor(red: 0.14, green: 0.55, blue: 0.94, alpha: 1),
+                UIColor(red: 0.27, green: 0.78, blue: 0.78, alpha: 1)
+            ],
+            action: #selector(tapCloudPanorama)
+        )
+        let typhoonShortcut = makeBottomSheetShortcut(
+            icon: "tropicalstorm",
+            title: L10n.t("weather.typhoon_monitor_title"),
+            colors: [
+                UIColor(red: 0.20, green: 0.37, blue: 0.96, alpha: 1),
+                UIColor(red: 0.54, green: 0.34, blue: 0.94, alpha: 1)
+            ],
+            action: #selector(tapTyphoon)
+        )
+        let sunsetShortcut = makeBottomSheetShortcut(
+            icon: "sunset.fill",
+            title: L10n.t("home.sunset_glow"),
+            colors: [
+                UIColor(red: 1.00, green: 0.43, blue: 0.23, alpha: 1),
+                UIColor(red: 0.96, green: 0.70, blue: 0.20, alpha: 1)
+            ],
+            action: #selector(tapSunsetGlow)
+        )
+        bottomSheetShortcutStack.addArrangedSubview(cloudShortcut)
+        bottomSheetShortcutStack.addArrangedSubview(typhoonShortcut)
+        bottomSheetShortcutStack.addArrangedSubview(sunsetShortcut)
+
+        let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handleBottomSheetPan(_:)))
+        bottomSearchSheet.addGestureRecognizer(panGesture)
+
+        view.addSubview(bottomSearchSheet)
+        bottomSearchSheet.addSubview(bottomSheetBlurView)
+        bottomSearchSheet.addSubview(bottomSheetMaterialOverlay)
+        bottomSearchSheet.addSubview(bottomSheetWeatherBadge)
+        bottomSearchSheet.addSubview(bottomSheetGrabber)
+        bottomSearchSheet.addSubview(bottomSheetSearchRow)
+        bottomSearchSheet.addSubview(bottomSheetAppIconContainer)
+        bottomSearchSheet.addSubview(bottomSheetHistoryStack)
+        bottomSearchSheet.addSubview(bottomSheetShortcutStack)
+
+        let height = bottomSearchSheet.heightAnchor.constraint(equalToConstant: bottomSheetCollapsedHeight)
+        bottomSheetHeightConstraint = height
+        NSLayoutConstraint.activate([
+            bottomSearchSheet.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
+            bottomSearchSheet.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
+            bottomSearchSheet.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: 10),
+            height,
+
+            bottomSheetBlurView.topAnchor.constraint(equalTo: bottomSearchSheet.topAnchor),
+            bottomSheetBlurView.leadingAnchor.constraint(equalTo: bottomSearchSheet.leadingAnchor),
+            bottomSheetBlurView.trailingAnchor.constraint(equalTo: bottomSearchSheet.trailingAnchor),
+            bottomSheetBlurView.bottomAnchor.constraint(equalTo: bottomSearchSheet.bottomAnchor),
+
+            bottomSheetMaterialOverlay.topAnchor.constraint(equalTo: bottomSearchSheet.topAnchor),
+            bottomSheetMaterialOverlay.leadingAnchor.constraint(equalTo: bottomSearchSheet.leadingAnchor),
+            bottomSheetMaterialOverlay.trailingAnchor.constraint(equalTo: bottomSearchSheet.trailingAnchor),
+            bottomSheetMaterialOverlay.bottomAnchor.constraint(equalTo: bottomSearchSheet.bottomAnchor),
+
+            bottomSheetWeatherBadge.trailingAnchor.constraint(equalTo: bottomSearchSheet.trailingAnchor, constant: -4),
+            bottomSheetWeatherBadge.bottomAnchor.constraint(equalTo: bottomSearchSheet.topAnchor, constant: -8),
+            bottomSheetWeatherBadge.heightAnchor.constraint(equalToConstant: 32),
+            bottomSheetWeatherBadge.widthAnchor.constraint(equalToConstant: 82),
+
+            bottomSheetWeatherIconView.leadingAnchor.constraint(equalTo: bottomSheetWeatherBadge.contentView.leadingAnchor, constant: 10),
+            bottomSheetWeatherIconView.centerYAnchor.constraint(equalTo: bottomSheetWeatherBadge.contentView.centerYAnchor),
+            bottomSheetWeatherIconView.widthAnchor.constraint(equalToConstant: 18),
+            bottomSheetWeatherIconView.heightAnchor.constraint(equalToConstant: 18),
+
+            bottomSheetTemperatureLabel.leadingAnchor.constraint(equalTo: bottomSheetWeatherIconView.trailingAnchor, constant: 2),
+            bottomSheetTemperatureLabel.trailingAnchor.constraint(equalTo: bottomSheetWeatherBadge.contentView.trailingAnchor, constant: -10),
+            bottomSheetTemperatureLabel.centerYAnchor.constraint(equalTo: bottomSheetWeatherBadge.contentView.centerYAnchor),
+
+            bottomSheetGrabber.topAnchor.constraint(equalTo: bottomSearchSheet.topAnchor, constant: 8),
+            bottomSheetGrabber.centerXAnchor.constraint(equalTo: bottomSearchSheet.centerXAnchor),
+            bottomSheetGrabber.widthAnchor.constraint(equalToConstant: 40),
+            bottomSheetGrabber.heightAnchor.constraint(equalToConstant: 4),
+
+            bottomSheetSearchRow.topAnchor.constraint(equalTo: bottomSheetGrabber.bottomAnchor, constant: 8),
+            bottomSheetSearchRow.leadingAnchor.constraint(equalTo: bottomSearchSheet.leadingAnchor, constant: 16),
+            bottomSheetSearchRow.trailingAnchor.constraint(equalTo: bottomSheetAppIconContainer.leadingAnchor, constant: -6),
+            bottomSheetSearchRow.heightAnchor.constraint(equalToConstant: 40),
+
+            bottomSheetAppIconContainer.trailingAnchor.constraint(equalTo: bottomSearchSheet.trailingAnchor, constant: -16),
+            bottomSheetAppIconContainer.centerYAnchor.constraint(equalTo: bottomSheetSearchRow.centerYAnchor),
+            bottomSheetAppIconContainer.widthAnchor.constraint(equalToConstant: 40),
+            bottomSheetAppIconContainer.heightAnchor.constraint(equalToConstant: 40),
+
+            bottomSheetAppIconView.centerXAnchor.constraint(equalTo: bottomSheetAppIconContainer.centerXAnchor),
+            bottomSheetAppIconView.centerYAnchor.constraint(equalTo: bottomSheetAppIconContainer.centerYAnchor),
+            bottomSheetAppIconView.widthAnchor.constraint(equalToConstant: 30),
+            bottomSheetAppIconView.heightAnchor.constraint(equalToConstant: 30),
+
+            searchIcon.leadingAnchor.constraint(equalTo: bottomSheetSearchRow.leadingAnchor, constant: 14),
+            searchIcon.centerYAnchor.constraint(equalTo: bottomSheetSearchRow.centerYAnchor),
+            searchIcon.widthAnchor.constraint(equalToConstant: 18),
+            searchIcon.heightAnchor.constraint(equalToConstant: 18),
+
+            bottomSheetSearchTextLabel.leadingAnchor.constraint(equalTo: searchIcon.trailingAnchor, constant: 10),
+            bottomSheetSearchTextLabel.trailingAnchor.constraint(lessThanOrEqualTo: bottomSheetSearchRow.trailingAnchor, constant: -14),
+            bottomSheetSearchTextLabel.centerYAnchor.constraint(equalTo: bottomSheetSearchRow.centerYAnchor),
+
+            bottomSheetHistoryStack.topAnchor.constraint(equalTo: bottomSheetSearchRow.bottomAnchor, constant: 16),
+            bottomSheetHistoryStack.leadingAnchor.constraint(equalTo: bottomSearchSheet.leadingAnchor, constant: 16),
+            bottomSheetHistoryStack.trailingAnchor.constraint(equalTo: bottomSearchSheet.trailingAnchor, constant: -16),
+
+            bottomSheetShortcutStack.topAnchor.constraint(equalTo: bottomSheetHistoryStack.bottomAnchor, constant: 16),
+            bottomSheetShortcutStack.leadingAnchor.constraint(equalTo: bottomSearchSheet.leadingAnchor, constant: 16),
+            bottomSheetShortcutStack.trailingAnchor.constraint(equalTo: bottomSearchSheet.trailingAnchor, constant: -16),
+            bottomSheetShortcutStack.heightAnchor.constraint(equalToConstant: 58)
+        ])
+
+        reloadBottomSheetHistory()
+        applyCachedBottomSheetWeather()
+        updateBottomSearchSheet(animated: false)
+    }
+
+    private var bottomSheetCollapsedHeight: CGFloat {
+        71 + view.safeAreaInsets.bottom
+    }
+
+    private var bottomSheetExpandedHeight: CGFloat {
+        min(360 + view.safeAreaInsets.bottom, view.bounds.height * 0.58)
+    }
+
+    private func makeBottomSheetShortcut(icon: String, title: String, colors: [UIColor], action: Selector) -> UIControl {
+        let control = GradientShortcutControl(icon: icon, title: title, colors: colors)
+        control.addTarget(self, action: action, for: .touchUpInside)
+        return control
+    }
+
+    private func reloadBottomSheetHistory() {
+        bottomSheetSearchTextLabel.text = bottomSheetSearchTitle()
+
+        let items = Array(POIHistoryStore.load().prefix(3))
+        let signature = items
+            .map { "\($0.name)|\($0.address)|\($0.latitude)|\($0.longitude)" }
+            .joined(separator: ";;")
+        guard signature != bottomSheetHistorySignature else { return }
+        bottomSheetHistorySignature = signature
+
+        UIView.performWithoutAnimation {
+            bottomSheetHistoryStack.arrangedSubviews.forEach { view in
+                bottomSheetHistoryStack.removeArrangedSubview(view)
+                view.removeFromSuperview()
+            }
+
+            let titleLabel = UILabel()
+            titleLabel.text = L10n.t("search.history")
+            titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+            titleLabel.textColor = .secondaryLabel
+            bottomSheetHistoryStack.addArrangedSubview(titleLabel)
+
+            if items.isEmpty {
+                let emptyLabel = UILabel()
+                emptyLabel.text = L10n.t("search.no_history")
+                emptyLabel.font = .systemFont(ofSize: 14)
+                emptyLabel.textColor = .tertiaryLabel
+                emptyLabel.heightAnchor.constraint(equalToConstant: 44).isActive = true
+                bottomSheetHistoryStack.addArrangedSubview(emptyLabel)
+                bottomSheetHistoryStack.layoutIfNeeded()
+                return
+            }
+
+            items.enumerated().forEach { index, poi in
+                let button = makeHistoryButton(for: poi, index: index)
+                bottomSheetHistoryStack.addArrangedSubview(button)
+            }
+            bottomSheetHistoryStack.layoutIfNeeded()
+        }
+    }
+
+    private func makeHistoryButton(for poi: SelectedPOI, index: Int) -> UIButton {
+        let button = UIButton(type: .system)
+        var configuration = UIButton.Configuration.plain()
+        configuration.image = UIImage(systemName: "clock.arrow.circlepath")
+        configuration.title = poi.name
+        configuration.subtitle = poi.address.isEmpty ? String(format: "%.6f, %.6f", poi.latitude, poi.longitude) : poi.address
+        configuration.imagePadding = 10
+        configuration.titleAlignment = .leading
+        configuration.baseForegroundColor = .label
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0)
+        button.configuration = configuration
+        button.contentHorizontalAlignment = .leading
+        button.tag = index
+        button.heightAnchor.constraint(equalToConstant: 52).isActive = true
+        button.addTarget(self, action: #selector(tapBottomSheetHistory(_:)), for: .touchUpInside)
+        return button
+    }
+
+    private func updateBottomSearchSheet(animated: Bool) {
+        bottomSheetHeightConstraint?.constant = isBottomSheetExpanded ? bottomSheetExpandedHeight : bottomSheetCollapsedHeight
+        let expandedAlpha: CGFloat = isBottomSheetExpanded ? 1 : 0
+        let changes = {
+            self.applyBottomSheetExpansionProgress(expandedAlpha)
+            self.view.layoutIfNeeded()
+        }
+        if animated {
+            UIView.animate(
+                withDuration: 0.38,
+                delay: 0,
+                usingSpringWithDamping: 0.86,
+                initialSpringVelocity: 0.55,
+                options: [.allowUserInteraction, .beginFromCurrentState],
+                animations: changes
+            )
+        } else {
+            changes()
+        }
+    }
+
+    private func setBottomSearchSheetExpanded(_ expanded: Bool, animated: Bool) {
+        isBottomSheetExpanded = expanded
+        if expanded {
+            reloadBottomSheetHistory()
+        }
+        updateBottomSearchSheet(animated: animated)
+    }
+
+    private func applyBottomSheetExpansionProgress(_ progress: CGFloat) {
+        let alpha = min(max(progress, 0), 1)
+        bottomSheetHistoryStack.alpha = alpha
+        bottomSheetShortcutStack.alpha = alpha
+    }
+
+    private func bottomSheetExpansionProgress(for height: CGFloat) -> CGFloat {
+        (height - bottomSheetCollapsedHeight) / max(1, bottomSheetExpandedHeight - bottomSheetCollapsedHeight)
+    }
+
+    private func bottomSheetSearchTitle() -> String {
+        let name = POIHistoryStore.load().first?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return name.isEmpty ? L10n.t("home.search_here") : name
     }
 
     // MARK: - 按钮样式
@@ -416,6 +777,7 @@ final class MapViewController: UIViewController {
     private func updateCurrentLocation(_ location: CurrentLocation, shouldCenterMap: Bool, forceCenter: Bool = false) {
         currentLocation = location
         sideMenuVC.updateCurrentLocation(displayLocation(for: location))
+        loadBottomSheetWeatherIfNeeded(for: location)
 
         #if canImport(BaiduMapAPI_Map)
         let bd09 = bd09Coordinate(for: location)
@@ -438,6 +800,125 @@ final class MapViewController: UIViewController {
             location.longitude,
             altitudeText
         )
+    }
+
+    private func loadBottomSheetWeatherIfNeeded(for location: CurrentLocation) {
+        let candidates = weatherCityCandidates(for: location)
+        let requestKey = candidates.joined(separator: "|")
+        guard !candidates.isEmpty, requestKey != lastBottomSheetWeatherCity else { return }
+        lastBottomSheetWeatherCity = requestKey
+        requestBottomSheetWeather(candidates: candidates, index: 0)
+    }
+
+    private func requestBottomSheetWeather(candidates: [String], index: Int) {
+        guard index < candidates.count else { return }
+
+        ApiClient.fetchWeatherDetail(city: candidates[index]) { [weak self] result in
+            guard let self,
+                  let live = (result.json?["lives"] as? [[String: Any]])?.first else {
+                self?.requestBottomSheetWeather(candidates: candidates, index: index + 1)
+                return
+            }
+
+            let weather = live["weather"] as? String ?? ""
+            let temperature = live["temperature"] as? String ?? ""
+            guard !weather.isEmpty || !temperature.isEmpty else {
+                self.requestBottomSheetWeather(candidates: candidates, index: index + 1)
+                return
+            }
+
+            let icon = self.bottomSheetWeatherIcon(for: weather)
+            let cachedWeather = SpUtil.string(.lastLiveWeather)
+            let cachedTemperature = SpUtil.string(.lastLiveTemperature)
+            if weather != cachedWeather || temperature != cachedTemperature {
+                SpUtil.setString(weather, for: .lastLiveWeather)
+                SpUtil.setString(temperature, for: .lastLiveTemperature)
+                self.bottomSheetWeatherIconView.image = UIImage(systemName: icon.name)
+                self.bottomSheetWeatherIconView.tintColor = icon.color
+                self.bottomSheetTemperatureLabel.text = temperature.isEmpty ? "--°" : "\(temperature)°"
+            }
+        }
+    }
+
+    private func applyCachedBottomSheetWeather() {
+        let weather = SpUtil.string(.lastLiveWeather)
+        let temperature = SpUtil.string(.lastLiveTemperature)
+        guard !weather.isEmpty || !temperature.isEmpty else { return }
+
+        let icon = bottomSheetWeatherIcon(for: weather)
+        bottomSheetWeatherIconView.image = UIImage(systemName: icon.name)
+        bottomSheetWeatherIconView.tintColor = icon.color
+        bottomSheetTemperatureLabel.text = temperature.isEmpty ? "--°" : "\(temperature)°"
+    }
+
+    private func weatherCityCandidates(for location: CurrentLocation) -> [String] {
+        [
+            cityLevelAdcode(from: location.adcode),
+            location.adcode,
+            location.city,
+            Constants.city,
+            "110000"
+        ]
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+        .reduce(into: [String]()) { result, value in
+            if !result.contains(value) {
+                result.append(value)
+            }
+        }
+    }
+
+    private func cityLevelAdcode(from adcode: String?) -> String? {
+        guard let adcode = adcode?.trimmingCharacters(in: .whitespacesAndNewlines),
+              adcode.count == 6,
+              adcode.allSatisfy(\.isNumber) else {
+            return nil
+        }
+
+        let provincePrefix = String(adcode.prefix(2))
+        if ["11", "12", "31", "50"].contains(provincePrefix) {
+            return "\(provincePrefix)0000"
+        }
+
+        let cityPrefix = String(adcode.prefix(4))
+        return "\(cityPrefix)00"
+    }
+
+    private func bottomSheetWeatherIcon(for weather: String) -> (name: String, color: UIColor) {
+        let value = weather.lowercased()
+
+        if value.contains("冰雹") || value.contains("雹") || value.contains("hail") {
+            return ("cloud.hail.fill", UIColor(red: 0.34, green: 0.64, blue: 0.94, alpha: 1))
+        }
+        if value.contains("雷") || value.contains("thunder") || value.contains("storm") {
+            return ("cloud.bolt.rain.fill", UIColor(red: 0.93, green: 0.68, blue: 0.18, alpha: 1))
+        }
+        if value.contains("暴雨") || value.contains("大暴雨") || value.contains("特大暴雨") || value.contains("heavy rain") {
+            return ("cloud.heavyrain.fill", UIColor(red: 0.16, green: 0.48, blue: 0.90, alpha: 1))
+        }
+        if value.contains("雨夹雪") || value.contains("sleet") {
+            return ("cloud.sleet.fill", UIColor(red: 0.23, green: 0.58, blue: 0.84, alpha: 1))
+        }
+        if value.contains("雪") || value.contains("snow") {
+            return ("cloud.snow.fill", UIColor(red: 0.20, green: 0.70, blue: 0.78, alpha: 1))
+        }
+        if value.contains("大雨") || value.contains("中雨") || value.contains("阵雨") || value.contains("雨") || value.contains("rain") {
+            return ("cloud.rain.fill", UIColor(red: 0.18, green: 0.53, blue: 0.90, alpha: 1))
+        }
+        if value.contains("雾") || value.contains("霾") || value.contains("沙") || value.contains("尘") || value.contains("fog") || value.contains("haze") {
+            return ("cloud.fog.fill", .systemGray)
+        }
+        if value.contains("阴") || value.contains("cloudy") {
+            return ("cloud.fill", .systemGray)
+        }
+        if value.contains("多云") || value.contains("少云") || value.contains("partly") {
+            return ("cloud.sun.fill", UIColor(red: 0.95, green: 0.58, blue: 0.18, alpha: 1))
+        }
+        if value.contains("晴") || value.contains("clear") || value.contains("sun") {
+            return ("sun.max.fill", UIColor(red: 0.96, green: 0.66, blue: 0.14, alpha: 1))
+        }
+
+        return ("cloud.sun.fill", UIColor(red: 0.95, green: 0.58, blue: 0.18, alpha: 1))
     }
 
     private func centerMap(on location: CurrentLocation) {
@@ -480,6 +961,51 @@ final class MapViewController: UIViewController {
         navigationController?.pushViewController(RoutePlanViewController(startLocation: currentLocation), animated: true)
     }
 
+    @objc private func tapBottomSearchRow() {
+        if isBottomSheetExpanded {
+            tapSearch()
+        } else {
+            setBottomSearchSheetExpanded(true, animated: true)
+        }
+    }
+
+    @objc private func tapBottomSheetHistory(_ sender: UIButton) {
+        let items = Array(POIHistoryStore.load().prefix(3))
+        guard sender.tag >= 0, sender.tag < items.count else { return }
+        navigationController?.pushViewController(
+            RoutePlanViewController(startLocation: currentLocation, destinationPOI: items[sender.tag]),
+            animated: true
+        )
+    }
+
+    @objc private func handleBottomSheetPan(_ gesture: UIPanGestureRecognizer) {
+        let translation = gesture.translation(in: view)
+        let velocity = gesture.velocity(in: view)
+
+        switch gesture.state {
+        case .began:
+            isDraggingBottomSheet = true
+        case .changed:
+            let baseHeight = isBottomSheetExpanded ? bottomSheetExpandedHeight : bottomSheetCollapsedHeight
+            let targetHeight = baseHeight - translation.y
+            let clampedHeight = min(max(targetHeight, bottomSheetCollapsedHeight), bottomSheetExpandedHeight)
+            bottomSheetHeightConstraint?.constant = clampedHeight
+            applyBottomSheetExpansionProgress(bottomSheetExpansionProgress(for: clampedHeight))
+            view.layoutIfNeeded()
+        case .ended, .cancelled, .failed:
+            isDraggingBottomSheet = false
+            if abs(velocity.y) > 250 {
+                setBottomSearchSheetExpanded(velocity.y < 0, animated: true)
+            } else {
+                let currentHeight = bottomSheetHeightConstraint?.constant ?? bottomSheetCollapsedHeight
+                let midpoint = (bottomSheetCollapsedHeight + bottomSheetExpandedHeight) / 2
+                setBottomSearchSheetExpanded(currentHeight > midpoint, animated: true)
+            }
+        default:
+            break
+        }
+    }
+
     @objc private func tapCloudPanorama() {
         navigationController?.pushViewController(CloudPanoramaListViewController(), animated: true)
     }
@@ -489,6 +1015,10 @@ final class MapViewController: UIViewController {
     }
 
     @objc private func tapWeather() {
+        navigationController?.pushViewController(WeatherViewController(location: currentLocation), animated: true)
+    }
+
+    @objc private func tapSunsetGlow() {
         navigationController?.pushViewController(WeatherViewController(location: currentLocation), animated: true)
     }
 
@@ -644,3 +1174,66 @@ extension MapViewController: BMKMapViewDelegate {
     }
 }
 #endif
+
+private final class GradientShortcutControl: UIControl {
+    private let gradientLayer = CAGradientLayer()
+    private let iconView = UIImageView()
+    private let titleLabel = UILabel()
+
+    init(icon: String, title: String, colors: [UIColor]) {
+        super.init(frame: .zero)
+
+        gradientLayer.colors = colors.map(\.cgColor)
+        gradientLayer.startPoint = CGPoint(x: 0, y: 0)
+        gradientLayer.endPoint = CGPoint(x: 1, y: 1)
+        layer.insertSublayer(gradientLayer, at: 0)
+        layer.cornerRadius = 14
+        layer.cornerCurve = .continuous
+        clipsToBounds = true
+
+        iconView.image = UIImage(systemName: icon)
+        iconView.tintColor = .white
+        iconView.contentMode = .scaleAspectFit
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+
+        titleLabel.text = title
+        titleLabel.textColor = UIColor.white.withAlphaComponent(0.96)
+        titleLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        titleLabel.textAlignment = .center
+        titleLabel.adjustsFontSizeToFitWidth = true
+        titleLabel.minimumScaleFactor = 0.72
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        addSubview(iconView)
+        addSubview(titleLabel)
+        NSLayoutConstraint.activate([
+            iconView.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            iconView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: 20),
+            iconView.heightAnchor.constraint(equalToConstant: 20),
+
+            titleLabel.topAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 3),
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
+            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6)
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var isHighlighted: Bool {
+        didSet {
+            UIView.animate(withDuration: 0.16) {
+                self.transform = self.isHighlighted ? CGAffineTransform(scaleX: 0.97, y: 0.97) : .identity
+                self.alpha = self.isHighlighted ? 0.86 : 1
+            }
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        gradientLayer.frame = bounds
+    }
+}

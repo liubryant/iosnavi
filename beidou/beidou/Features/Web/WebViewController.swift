@@ -77,6 +77,7 @@ final class WebViewController: UIViewController {
         case .localHTML(let resourceName):
             setupLocalHTML(resourceName: resourceName)
         }
+        setupFullScreenEdgeBackGestureIfNeeded()
     }
 
     override var prefersStatusBarHidden: Bool {
@@ -103,6 +104,12 @@ final class WebViewController: UIViewController {
             navigationController?.setNavigationBarHidden(previousNavigationBarHidden, animated: animated)
         }
         UMengAnalytics.shared.pageEnd(title ?? "WebViewController")
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        guard previousTraitCollection?.userInterfaceStyle != traitCollection.userInterfaceStyle else { return }
+        applyFullScreenTitleStyle()
     }
 
     // MARK: - 本地长文本
@@ -211,7 +218,6 @@ final class WebViewController: UIViewController {
     private func setupFullScreenTitle() {
         fullScreenTitleLabel.text = title
         fullScreenTitleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
-        fullScreenTitleLabel.textColor = .label
         fullScreenTitleLabel.textAlignment = .center
         fullScreenTitleLabel.translatesAutoresizingMaskIntoConstraints = false
 
@@ -222,6 +228,23 @@ final class WebViewController: UIViewController {
             fullScreenTitleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: backButton.trailingAnchor, constant: 8),
             fullScreenTitleLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -64)
         ])
+        applyFullScreenTitleStyle()
+    }
+
+    private func applyFullScreenTitleStyle() {
+        fullScreenTitleLabel.textColor = traitCollection.userInterfaceStyle == .dark ? .black : .label
+    }
+
+    private func setupFullScreenEdgeBackGestureIfNeeded() {
+        guard fullScreen else { return }
+        let gesture = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(handleFullScreenEdgeBack(_:)))
+        gesture.edges = .left
+        view.addGestureRecognizer(gesture)
+    }
+
+    @objc private func handleFullScreenEdgeBack(_ gesture: UIScreenEdgePanGestureRecognizer) {
+        guard gesture.state == .recognized else { return }
+        tapBack()
     }
 
     @objc private func tapBack() {

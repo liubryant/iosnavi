@@ -41,6 +41,10 @@ enum SpUtil {
         case reviewPromptedAfterCloudScenes = "review_prompted_after_cloud_scenes"
         /// 上次火烧云预测结果 JSON 缓存
         case sunsetPredictionCache = "sunset_prediction_cache"
+        /// 上次实时天气描述，用于首页底部天气胶囊复用天气页内容
+        case lastLiveWeather = "last_live_weather"
+        /// 上次实时天气温度，用于首页底部天气胶囊复用天气页内容
+        case lastLiveTemperature = "last_live_temperature"
     }
 
     private static let defaults = UserDefaults.standard

@@ -21,7 +21,9 @@
 "agreement.exit_app" = "退出App";
 
 "home.search_placeholder" = "请输入终点";
+"home.search_here" = "在此处搜索";
 "home.cloud_panorama" = "720云";
+"home.sunset_glow" = "火烧云";
 "home.bottom_label" = "卫星定位导航系统";
 "home.coordinate_format" = "%@\n纬度：%.6f\n经度：%.6f\n海拔：%@";
 "home.altitude_value_format" = "%.1f 米";
@@ -73,6 +75,7 @@
 "weather.title" = "天气查询";
 "weather.typhoon_title" = "台风路径";
 "weather.typhoon_monitor_title" = "台风监测";
+"weather.altitude_format" = "海拔 %@";
 "weather.forecast_title" = "未来天气预报";
 "weather.no_forecast" = "暂无预报数据";
 "weather.check_capability" = "请检查网络连接后重试";

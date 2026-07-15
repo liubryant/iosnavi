@@ -21,7 +21,9 @@ final class WeatherViewController: UIViewController {
     private let backgroundView = WeatherAnimatedBackgroundView()
     private let backButton = UIButton(type: .system)
     private let cityLabel = UILabel()
+    private let topWeatherInfoStack = UIStackView()
     private let topWeatherIconView = UIImageView()
+    private let altitudeLabel = UILabel()
     private let weatherLabel = UILabel()
     private let weatherIconView = UIImageView()
     private let temperatureLabel = UILabel()
@@ -70,6 +72,8 @@ final class WeatherViewController: UIViewController {
         let scrollView = UIScrollView()
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.backgroundColor = .clear
+        scrollView.contentInset.bottom = 40
+        scrollView.verticalScrollIndicatorInsets.bottom = 40
 
         let contentStack = UIStackView()
         contentStack.axis = .vertical
@@ -84,6 +88,17 @@ final class WeatherViewController: UIViewController {
         topWeatherIconView.tintColor = .systemOrange
         topWeatherIconView.image = UIImage(systemName: "cloud.sun.fill")
         topWeatherIconView.translatesAutoresizingMaskIntoConstraints = false
+        altitudeLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        altitudeLabel.textColor = .secondaryLabel
+        altitudeLabel.textAlignment = .right
+        altitudeLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        altitudeLabel.translatesAutoresizingMaskIntoConstraints = false
+        topWeatherInfoStack.axis = .horizontal
+        topWeatherInfoStack.alignment = .center
+        topWeatherInfoStack.spacing = 5
+        topWeatherInfoStack.translatesAutoresizingMaskIntoConstraints = false
+        topWeatherInfoStack.addArrangedSubview(topWeatherIconView)
+        topWeatherInfoStack.addArrangedSubview(altitudeLabel)
 
         let weatherRow = UIStackView(arrangedSubviews: [weatherLabel, weatherIconView])
         weatherRow.axis = .horizontal
@@ -151,12 +166,12 @@ final class WeatherViewController: UIViewController {
             scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
 
             contentStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 62),
             contentStack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor, constant: 16),
             contentStack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor, constant: -16),
-            contentStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -16),
+            contentStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -56),
             contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -32),
 
             activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
@@ -170,20 +185,31 @@ final class WeatherViewController: UIViewController {
         loadWeather()
     }
 
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        guard previousTraitCollection?.userInterfaceStyle != traitCollection.userInterfaceStyle else { return }
+        applyTopTitleStyle()
+    }
+
     private func setupCityHeader() {
         view.addSubview(cityLabel)
-        view.addSubview(topWeatherIconView)
+        view.addSubview(topWeatherInfoStack)
         NSLayoutConstraint.activate([
             cityLabel.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
             cityLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             cityLabel.leadingAnchor.constraint(greaterThanOrEqualTo: backButton.trailingAnchor, constant: 8),
-            cityLabel.trailingAnchor.constraint(lessThanOrEqualTo: topWeatherIconView.leadingAnchor, constant: -8),
+            cityLabel.trailingAnchor.constraint(lessThanOrEqualTo: topWeatherInfoStack.leadingAnchor, constant: -8),
 
-            topWeatherIconView.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
-            topWeatherIconView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+            topWeatherInfoStack.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
+            topWeatherInfoStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
             topWeatherIconView.widthAnchor.constraint(equalToConstant: 26),
             topWeatherIconView.heightAnchor.constraint(equalToConstant: 26)
         ])
+        applyTopTitleStyle()
+    }
+
+    private func applyTopTitleStyle() {
+        cityLabel.textColor = traitCollection.userInterfaceStyle == .dark ? .black : .label
     }
 
     private func setupBackButton() {
@@ -247,6 +273,9 @@ final class WeatherViewController: UIViewController {
     private func setupFeedAdContainer() {
         feedAdContainer.translatesAutoresizingMaskIntoConstraints = false
         feedAdContainer.backgroundColor = .secondarySystemGroupedBackground
+        feedAdContainer.layer.cornerRadius = 12
+        feedAdContainer.layer.cornerCurve = .continuous
+        feedAdContainer.clipsToBounds = true
         feedAdContainer.isHidden = !Constants.isInlineTemplateAdEnabled
         feedAdContainer.heightAnchor.constraint(equalToConstant: Constants.isInlineTemplateAdEnabled ? 250 : 0).isActive = true
     }
@@ -292,6 +321,7 @@ final class WeatherViewController: UIViewController {
 
     private func loadWeather() {
         let current = currentLocation()
+        updateAltitudeLabel(for: current)
         loadSunsetPrediction(location: current)
         if !loadAmapSearchKitWeather(location: current) {
             loadAmapWeatherFallback(location: current)
@@ -409,6 +439,7 @@ final class WeatherViewController: UIViewController {
 
             self.activityIndicator.stopAnimating()
             self.cityLabel.text = (live["city"] as? String)?.isEmpty == false ? (live["city"] as? String) : location.city
+            self.updateAltitudeLabel(for: location)
             let weather = live["weather"] as? String ?? L10n.t("weather.title")
             self.setWeatherText(weather)
 
@@ -417,6 +448,7 @@ final class WeatherViewController: UIViewController {
             } else {
                 self.temperatureLabel.text = "--°"
             }
+            self.cacheLiveWeather(weather: weather, temperature: live["temperature"] as? String ?? "")
 
             let windDirection = live["winddirection"] as? String ?? ""
             let windPower = live["windpower"] as? String ?? ""
@@ -623,6 +655,22 @@ final class WeatherViewController: UIViewController {
         topWeatherIconView.isHidden = text.isEmpty
     }
 
+    private func cacheLiveWeather(weather: String, temperature: String) {
+        SpUtil.setString(weather, for: .lastLiveWeather)
+        SpUtil.setString(temperature, for: .lastLiveTemperature)
+    }
+
+    private func updateAltitudeLabel(for location: CurrentLocation) {
+        guard let altitude = location.altitude else {
+            altitudeLabel.text = nil
+            altitudeLabel.isHidden = true
+            return
+        }
+        let value = L10n.f("home.altitude_value_format", altitude)
+        altitudeLabel.text = L10n.f("weather.altitude_format", value)
+        altitudeLabel.isHidden = false
+    }
+
     private func weatherScene(for weather: String) -> WeatherAnimatedBackgroundView.Scene {
         let value = weather.lowercased()
 
@@ -697,8 +745,10 @@ final class WeatherViewController: UIViewController {
 
         activityIndicator.stopAnimating()
         cityLabel.text = city.isEmpty ? location.city : city
+        updateAltitudeLabel(for: location)
         setWeatherText(weather.isEmpty ? L10n.t("weather.title") : weather)
         temperatureLabel.text = temperature.isEmpty ? "--°" : "\(temperature)°"
+        cacheLiveWeather(weather: weather, temperature: temperature)
 
         windLabel.text = [windDirection, windPower].filter { !$0.isEmpty }.joined(separator: " ")
         if windLabel.text?.isEmpty != false {
