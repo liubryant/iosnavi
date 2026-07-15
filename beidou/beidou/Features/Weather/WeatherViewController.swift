@@ -28,6 +28,12 @@ final class WeatherViewController: UIViewController {
     private let windLabel = UILabel()
     private let humidityLabel = UILabel()
     private let reportTimeLabel = UILabel()
+    private let sunsetScoreLabel = UILabel()
+    private let sunsetStrengthChartView = SunsetStrengthChartView()
+    private let sunsetFactorStack = UIStackView()
+    private let sunsetTimeLabel = UILabel()
+    private let sunsetCloudLabel = UILabel()
+    private let sunsetMetricsLabel = UILabel()
     private let forecastStack = UIStackView()
     private let feedAdContainer = UIView()
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
@@ -111,6 +117,11 @@ final class WeatherViewController: UIViewController {
         forecastTitle.text = L10n.t("weather.forecast_title")
         forecastTitle.font = .boldSystemFont(ofSize: 16)
 
+        let sunsetTitle = UILabel()
+        sunsetTitle.text = L10n.t("weather.sunset_title")
+        sunsetTitle.font = .boldSystemFont(ofSize: 16)
+        let sunsetCard = makeSunsetPredictionCard()
+
         forecastStack.axis = .vertical
         forecastStack.spacing = 0
         let forecastCard = makeCard(arrangedSubviews: [forecastStack])
@@ -121,6 +132,8 @@ final class WeatherViewController: UIViewController {
         activityIndicator.startAnimating()
 
         contentStack.addArrangedSubview(liveCard)
+        contentStack.addArrangedSubview(sunsetTitle)
+        contentStack.addArrangedSubview(sunsetCard)
         contentStack.addArrangedSubview(forecastTitle)
         contentStack.addArrangedSubview(forecastCard)
         contentStack.addArrangedSubview(feedAdContainer)
@@ -152,6 +165,7 @@ final class WeatherViewController: UIViewController {
 
         setupBackButton()
         setupCityHeader()
+        showSunsetPredictionLoading()
 
         loadWeather()
     }
@@ -237,6 +251,33 @@ final class WeatherViewController: UIViewController {
         feedAdContainer.heightAnchor.constraint(equalToConstant: Constants.isInlineTemplateAdEnabled ? 250 : 0).isActive = true
     }
 
+    private func makeSunsetPredictionCard() -> UIView {
+        sunsetScoreLabel.font = .systemFont(ofSize: 34, weight: .bold)
+        sunsetScoreLabel.textAlignment = .center
+
+        sunsetStrengthChartView.translatesAutoresizingMaskIntoConstraints = false
+        sunsetStrengthChartView.heightAnchor.constraint(equalToConstant: 96).isActive = true
+
+        sunsetFactorStack.axis = .vertical
+        sunsetFactorStack.spacing = 8
+
+        [sunsetTimeLabel, sunsetCloudLabel, sunsetMetricsLabel].forEach { label in
+            label.font = .systemFont(ofSize: 14)
+            label.textColor = .secondaryLabel
+            label.textAlignment = .center
+            label.numberOfLines = 0
+        }
+
+        return makeCard(arrangedSubviews: [
+            sunsetScoreLabel,
+            sunsetStrengthChartView,
+            sunsetTimeLabel,
+            sunsetCloudLabel,
+            sunsetMetricsLabel,
+            sunsetFactorStack
+        ])
+    }
+
     private func loadFeedAdIfNeeded() {
         guard Constants.isInlineTemplateAdEnabled, !didLoadFeedAd else { return }
         didLoadFeedAd = true
@@ -251,9 +292,40 @@ final class WeatherViewController: UIViewController {
 
     private func loadWeather() {
         let current = currentLocation()
+        loadSunsetPrediction(location: current)
         if !loadAmapSearchKitWeather(location: current) {
             loadAmapWeatherFallback(location: current)
         }
+    }
+
+    private func loadSunsetPrediction(location: CurrentLocation) {
+        if let cached = cachedSunsetPredictions(), !cached.isEmpty {
+            applySunsetPredictions(cached)
+        } else {
+            showSunsetPredictionLoading()
+        }
+
+        ApiClient.fetchSunsetPredictions(latitude: location.latitude, longitude: location.longitude) { [weak self] predictions in
+            guard let self else { return }
+            guard !predictions.isEmpty else {
+                if self.cachedSunsetPredictions()?.isEmpty != false {
+                    self.showSunsetPredictionFailed()
+                }
+                return
+            }
+            self.cacheSunsetPredictions(predictions)
+            self.applySunsetPredictions(predictions)
+        }
+    }
+
+    private func cachedSunsetPredictions() -> [ApiClient.SunsetPrediction]? {
+        guard let data = SpUtil.data(.sunsetPredictionCache) else { return nil }
+        return try? JSONDecoder().decode([ApiClient.SunsetPrediction].self, from: data)
+    }
+
+    private func cacheSunsetPredictions(_ predictions: [ApiClient.SunsetPrediction]) {
+        guard let data = try? JSONEncoder().encode(predictions) else { return }
+        SpUtil.setData(data, for: .sunsetPredictionCache)
     }
 
     private func loadAmapSearchKitWeather(location: CurrentLocation) -> Bool {
@@ -407,6 +479,136 @@ final class WeatherViewController: UIViewController {
             amapError.map { L10n.f("weather.amap_error", $0) }
         ].compactMap { $0 }
         return messages.isEmpty ? L10n.t("weather.no_forecast") : messages.joined(separator: "\n")
+    }
+
+    private func showSunsetPredictionLoading() {
+        sunsetScoreLabel.text = "--%"
+        sunsetScoreLabel.textColor = .secondaryLabel
+        sunsetStrengthChartView.predictions = []
+        sunsetTimeLabel.text = L10n.t("weather.sunset_loading")
+        sunsetCloudLabel.text = nil
+        sunsetMetricsLabel.text = nil
+        sunsetFactorStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+    }
+
+    private func showSunsetPredictionFailed() {
+        sunsetScoreLabel.text = "--%"
+        sunsetScoreLabel.textColor = .secondaryLabel
+        sunsetStrengthChartView.predictions = []
+        sunsetTimeLabel.text = L10n.t("weather.sunset_failed")
+        sunsetCloudLabel.text = nil
+        sunsetMetricsLabel.text = nil
+        sunsetFactorStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+    }
+
+    private func applySunsetPredictions(_ predictions: [ApiClient.SunsetPrediction]) {
+        guard let prediction = predictions.first else { return }
+        let color = sunsetColor(for: prediction.quality)
+        sunsetScoreLabel.text = L10n.f("weather.sunset_score_format", "\(prediction.percentage)", sunsetQualityLabel(for: prediction.quality))
+        sunsetScoreLabel.textColor = color
+        sunsetStrengthChartView.predictions = predictions
+
+        let timeParts = [
+            prediction.sunsetTime.isEmpty ? nil : L10n.f("weather.sunset_time", prediction.sunsetTime),
+            prediction.goldenHour.isEmpty ? nil : L10n.f("weather.sunset_golden_hour", prediction.goldenHour)
+        ].compactMap { $0 }
+        sunsetTimeLabel.text = timeParts.joined(separator: "  ")
+        sunsetCloudLabel.text = "\(prediction.modelName) · \(prediction.cloudDescription)"
+
+        let metrics = [
+            L10n.f("weather.sunset_vividness", "\(prediction.vividnessPercentage)"),
+            L10n.f("weather.sunset_aerosol_proxy", "\(prediction.aerosolProxyPercentage)"),
+            prediction.cloudCover.map { L10n.f("weather.sunset_cloud_cover", "\($0)") },
+            prediction.visibilityKm.map { L10n.f("weather.sunset_visibility", String(format: "%.1f", $0)) },
+            prediction.humidity.map { L10n.f("weather.sunset_humidity", "\($0)") },
+            L10n.f("weather.sunset_rain", "\(prediction.rainProbability)"),
+            L10n.f("weather.sunset_confidence", "\(Int((prediction.confidence * 100).rounded()))")
+        ].compactMap { $0 }
+        sunsetMetricsLabel.text = metrics.joined(separator: "  ")
+
+        sunsetFactorStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        prediction.factors.forEach { factor in
+            sunsetFactorStack.addArrangedSubview(makeSunsetFactorRow(factor, prediction: prediction))
+        }
+    }
+
+    private func makeSunsetFactorRow(_ factor: ApiClient.SunsetPrediction.Factor, prediction: ApiClient.SunsetPrediction) -> UIView {
+        let row = UIStackView()
+        row.axis = .vertical
+        row.spacing = 3
+
+        let header = UIStackView()
+        header.axis = .horizontal
+        header.alignment = .center
+        header.spacing = 8
+
+        let titleLabel = UILabel()
+        titleLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        titleLabel.text = factor.title
+
+        let valueLabel = UILabel()
+        valueLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        valueLabel.textAlignment = .right
+        let displayValue = displayValue(for: factor, prediction: prediction)
+        valueLabel.textColor = sunsetColor(for: displayValue)
+        valueLabel.text = "\(Int((displayValue * 100).rounded()))%"
+
+        header.addArrangedSubview(titleLabel)
+        header.addArrangedSubview(valueLabel)
+
+        let bar = GradientMeterView()
+        bar.value = displayValue
+        bar.heightAnchor.constraint(equalToConstant: 8).isActive = true
+
+        let detailLabel = UILabel()
+        detailLabel.font = .systemFont(ofSize: 11)
+        detailLabel.textColor = .tertiaryLabel
+        detailLabel.numberOfLines = 0
+        detailLabel.text = factor.detail
+
+        row.addArrangedSubview(header)
+        row.addArrangedSubview(bar)
+        row.addArrangedSubview(detailLabel)
+        return row
+    }
+
+    private func displayValue(for factor: ApiClient.SunsetPrediction.Factor, prediction: ApiClient.SunsetPrediction) -> Double {
+        if factor.title == L10n.t("weather.sunset_factor_rain") {
+            return min(1.0, max(0.0, 1.0 - Double(prediction.rainProbability) / 100.0))
+        }
+        return factor.value
+    }
+
+    private func sunsetQualityLabel(for quality: Double) -> String {
+        if quality >= 0.75 {
+            return L10n.t("weather.sunset_quality_excellent")
+        }
+        if quality >= 0.65 {
+            return L10n.t("weather.sunset_quality_good")
+        }
+        if quality >= 0.50 {
+            return L10n.t("weather.sunset_quality_ok")
+        }
+        if quality >= 0.35 {
+            return L10n.t("weather.sunset_quality_fair")
+        }
+        if quality >= 0.20 {
+            return L10n.t("weather.sunset_quality_weak")
+        }
+        return L10n.t("weather.sunset_quality_poor")
+    }
+
+    private func sunsetColor(for quality: Double) -> UIColor {
+        if quality >= 0.75 {
+            return .systemRed
+        }
+        if quality >= 0.50 {
+            return .systemOrange
+        }
+        if quality >= 0.35 {
+            return .systemYellow
+        }
+        return .systemGray
     }
 
     private func setWeatherText(_ text: String) {
@@ -593,6 +795,138 @@ final class WeatherViewController: UIViewController {
 
     @objc private func tapBack() {
         navigationController?.popViewController(animated: true)
+    }
+}
+
+private final class SunsetStrengthChartView: UIView {
+    var predictions: [ApiClient.SunsetPrediction] = [] {
+        didSet { setNeedsDisplay() }
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .clear
+        isOpaque = false
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func draw(_ rect: CGRect) {
+        guard let context = UIGraphicsGetCurrentContext() else { return }
+        let rows = Array(predictions.prefix(2))
+        guard !rows.isEmpty else {
+            drawEmpty(in: rect)
+            return
+        }
+
+        let labelWidth: CGFloat = 44
+        let valueWidth: CGFloat = 44
+        let barHeight: CGFloat = 16
+        let rowGap: CGFloat = 22
+        let top: CGFloat = 10
+        let barX = labelWidth
+        let barWidth = max(0, rect.width - labelWidth - valueWidth - 6)
+
+        for (index, prediction) in rows.enumerated() {
+            let y = top + CGFloat(index) * (barHeight + rowGap)
+            drawText(prediction.dateLabel, in: CGRect(x: 0, y: y - 2, width: labelWidth - 6, height: 20), font: .systemFont(ofSize: 12, weight: .semibold), color: .secondaryLabel, alignment: .left)
+
+            let trackRect = CGRect(x: barX, y: y, width: barWidth, height: barHeight)
+            drawTrack(in: trackRect, context: context)
+            let fillRect = CGRect(x: trackRect.minX, y: trackRect.minY, width: trackRect.width * CGFloat(prediction.quality), height: trackRect.height)
+            drawGradient(in: fillRect, context: context)
+
+            drawText("\(prediction.percentage)%", in: CGRect(x: trackRect.maxX + 6, y: y - 2, width: valueWidth, height: 20), font: .systemFont(ofSize: 12, weight: .bold), color: strengthColor(for: prediction.quality), alignment: .right)
+        }
+
+        let scaleY = top + CGFloat(rows.count) * (barHeight + rowGap) - 7
+        [L10n.t("weather.sunset_scale_weak"), L10n.t("weather.sunset_scale_mid"), L10n.t("weather.sunset_scale_strong")].enumerated().forEach { index, text in
+            let x = barX + CGFloat(index) * barWidth / 2 - 12
+            drawText(text, in: CGRect(x: x, y: scaleY, width: 24, height: 14), font: .systemFont(ofSize: 10), color: .tertiaryLabel, alignment: .center)
+        }
+    }
+
+    private func drawEmpty(in rect: CGRect) {
+        drawText("--", in: rect, font: .systemFont(ofSize: 14, weight: .semibold), color: .secondaryLabel, alignment: .center)
+    }
+
+    private func drawTrack(in rect: CGRect, context: CGContext) {
+        let path = UIBezierPath(roundedRect: rect, cornerRadius: rect.height / 2)
+        UIColor.systemGray5.withAlphaComponent(0.9).setFill()
+        path.fill()
+    }
+
+    private func drawGradient(in rect: CGRect, context: CGContext) {
+        guard rect.width > 0 else { return }
+        context.saveGState()
+        UIBezierPath(roundedRect: rect, cornerRadius: rect.height / 2).addClip()
+        let colors = [
+            UIColor.systemGray.cgColor,
+            UIColor.systemYellow.cgColor,
+            UIColor.systemOrange.cgColor,
+            UIColor.systemRed.cgColor
+        ] as CFArray
+        let locations: [CGFloat] = [0, 0.35, 0.65, 1]
+        if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: locations) {
+            context.drawLinearGradient(gradient, start: CGPoint(x: rect.minX, y: rect.midY), end: CGPoint(x: rect.maxX, y: rect.midY), options: [])
+        }
+        context.restoreGState()
+    }
+
+    private func drawText(_ text: String, in rect: CGRect, font: UIFont, color: UIColor, alignment: NSTextAlignment) {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = alignment
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: color,
+            .paragraphStyle: paragraph
+        ]
+        (text as NSString).draw(in: rect, withAttributes: attributes)
+    }
+
+    private func strengthColor(for value: Double) -> UIColor {
+        if value >= 0.75 { return .systemRed }
+        if value >= 0.50 { return .systemOrange }
+        if value >= 0.35 { return .systemYellow }
+        return .systemGray
+    }
+}
+
+private final class GradientMeterView: UIView {
+    var value: Double = 0 {
+        didSet { setNeedsDisplay() }
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .clear
+        isOpaque = false
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func draw(_ rect: CGRect) {
+        guard let context = UIGraphicsGetCurrentContext() else { return }
+        let track = rect.insetBy(dx: 0, dy: 1)
+        UIColor.systemGray5.withAlphaComponent(0.9).setFill()
+        UIBezierPath(roundedRect: track, cornerRadius: track.height / 2).fill()
+
+        let fill = CGRect(x: track.minX, y: track.minY, width: track.width * CGFloat(min(1, max(0, value))), height: track.height)
+        guard fill.width > 0 else { return }
+        context.saveGState()
+        UIBezierPath(roundedRect: fill, cornerRadius: fill.height / 2).addClip()
+        let colors = [UIColor.systemGray.cgColor, UIColor.systemYellow.cgColor, UIColor.systemOrange.cgColor, UIColor.systemRed.cgColor] as CFArray
+        let locations: [CGFloat] = [0, 0.35, 0.65, 1]
+        if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: locations) {
+            context.drawLinearGradient(gradient, start: CGPoint(x: fill.minX, y: fill.midY), end: CGPoint(x: fill.maxX, y: fill.midY), options: [])
+        }
+        context.restoreGState()
     }
 }
 

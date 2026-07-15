@@ -2,7 +2,7 @@ NaviBeidou User Agreement
 
 Thank you for using NaviBeidou. This agreement explains the basic terms for using the app and related services.
 
-You should use the app in compliance with applicable laws and should not use the service for illegal, harmful, or abusive activities. Map, location, route, weather, panorama, and search information may come from third-party service providers and is provided for reference only.
+You should use the app in compliance with applicable laws and should not use the service for illegal, harmful, or abusive activities. Map, location, route, weather, sunset glow prediction, panorama, and search information may come from third-party service providers, including AMap, Baidu Maps, and Open-Meteo, and is provided for reference only.
 
 Navigation results may be affected by road conditions, positioning accuracy, network status, and third-party data. Please follow traffic laws and actual road signs while traveling.
 

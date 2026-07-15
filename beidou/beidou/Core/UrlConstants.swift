@@ -15,6 +15,9 @@ enum UrlConstants {
     /// 高德 Web服务 - 天气查询接口
     static let amapWeather = "https://restapi.amap.com/v3/weather/weatherInfo"
 
+    /// Open-Meteo - 免费天气预报接口，用于火烧云预测
+    static let openMeteoForecast = "https://api.open-meteo.com/v1/forecast"
+
     /// 高德 Web服务 - 关键字POI搜索 (终点搜索)
     static let amapPlaceText = "https://restapi.amap.com/v3/place/text"
 
@@ -23,4 +26,7 @@ enum UrlConstants {
 
     /// 用户反馈页面
     static let feedback = "http://cjym123.cn/h5/feedback.html"
+
+    /// 四创科技 - 台风实时路径专业版 H5
+    static let typhoonPath = "https://tf.istrongcloud.com/release/index-sc.html"
 }

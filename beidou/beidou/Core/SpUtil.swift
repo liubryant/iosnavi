@@ -37,6 +37,8 @@ enum SpUtil {
         case viewedCloudPanoramaSceneIDs = "viewed_cloud_panorama_scene_ids"
         /// 浏览满2个720云景区后，是否已触发过系统评分提示(只触发一次，避免频繁请求)
         case reviewPromptedAfterCloudScenes = "review_prompted_after_cloud_scenes"
+        /// 上次火烧云预测结果 JSON 缓存
+        case sunsetPredictionCache = "sunset_prediction_cache"
     }
 
     private static let defaults = UserDefaults.standard
@@ -78,6 +80,14 @@ enum SpUtil {
     }
 
     static func setStringArray(_ value: [String], for key: Key) {
+        defaults.set(value, forKey: key.rawValue)
+    }
+
+    static func data(_ key: Key) -> Data? {
+        defaults.data(forKey: key.rawValue)
+    }
+
+    static func setData(_ value: Data, for key: Key) {
         defaults.set(value, forKey: key.rawValue)
     }
 }

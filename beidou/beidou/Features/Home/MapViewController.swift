@@ -83,6 +83,7 @@ final class MapViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        refreshLocationOnColdStartIfNeeded()
         scheduleCloudPanoramaWelcomeIfNeeded()
         ReviewPromptManager.requestSystemReviewIfEligibleAfterCloudScenes(in: self)
     }
@@ -291,17 +292,18 @@ final class MapViewController: UIViewController {
         cloudPanoramaButton.addTarget(self, action: #selector(tapCloudPanorama), for: .touchUpInside)
     }
 
-    // MARK: - 右侧悬浮按钮: 周边 / 天气 / 路况
+    // MARK: - 右侧悬浮按钮: 周边 / 天气 / 台风 / 路况
 
     private func setupRightButtons() {
         let aroundButton = makeFloatingButton(icon: "mappin.and.ellipse", action: #selector(tapAround))
         let weatherButton = makeFloatingButton(icon: "cloud.sun", action: #selector(tapWeather))
+        let typhoonButton = makeFloatingButton(icon: "tropicalstorm", action: #selector(tapTyphoon))
         let cloudButton = makeFloatingTextButton(title: "720", action: #selector(tapCloudPanorama))
         trafficButton.setImage(UIImage(systemName: "car"), for: .normal)
         styleFloatingButton(trafficButton)
         trafficButton.addTarget(self, action: #selector(tapTraffic), for: .touchUpInside)
 
-        let stack = UIStackView(arrangedSubviews: [aroundButton, weatherButton, trafficButton, cloudButton])
+        let stack = UIStackView(arrangedSubviews: [aroundButton, weatherButton, typhoonButton, trafficButton, cloudButton])
         stack.axis = .vertical
         stack.spacing = 14
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -355,7 +357,7 @@ final class MapViewController: UIViewController {
 
     private func makeFloatingButton(icon: String, action: Selector) -> UIButton {
         let button = UIButton(type: .system)
-        button.setImage(UIImage(systemName: icon), for: .normal)
+        button.setImage(UIImage(systemName: icon) ?? UIImage(systemName: "circle"), for: .normal)
         styleFloatingButton(button)
         button.addTarget(self, action: action, for: .touchUpInside)
         return button
@@ -398,8 +400,17 @@ final class MapViewController: UIViewController {
 
         LocationManager.shared.requestLocation { [weak self] location in
             guard let self, let location else { return }
-            self.updateCurrentLocation(location, shouldCenterMap: shouldCenterMap)
+            self.updateCurrentLocation(
+                location,
+                shouldCenterMap: shouldCenterMap,
+                forceCenter: shouldCenterMap && !self.userDidMoveMap
+            )
         }
+    }
+
+    private func refreshLocationOnColdStartIfNeeded() {
+        guard currentLocation == nil || !hasCenteredInitialLocation else { return }
+        refreshLocation(shouldCenterMap: true)
     }
 
     private func updateCurrentLocation(_ location: CurrentLocation, shouldCenterMap: Bool, forceCenter: Bool = false) {
@@ -477,6 +488,15 @@ final class MapViewController: UIViewController {
 
     @objc private func tapWeather() {
         navigationController?.pushViewController(WeatherViewController(location: currentLocation), animated: true)
+    }
+
+    @objc private func tapTyphoon() {
+        guard let url = URL(string: UrlConstants.typhoonPath) else { return }
+        let controller = WebViewController(title: L10n.t("weather.typhoon_title"), content: .remoteURL(url), fullScreen: true)
+        controller.modalPresentationStyle = .fullScreen
+        controller.modalPresentationCapturesStatusBarAppearance = true
+        controller.modalTransitionStyle = .crossDissolve
+        present(controller, animated: true)
     }
 
     @objc private func tapTraffic() {

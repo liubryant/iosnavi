@@ -4,7 +4,7 @@ We respect your privacy and protect your personal information. This policy expla
 
 To provide positioning, route planning, navigation, nearby search, panorama, weather, feedback, analytics, and ad-related services, we may process location information, search keywords, device and network information, app runtime information, feedback content, and optional contact details that you provide.
 
-Some features rely on third-party SDKs or services, including map, navigation, weather, analytics, and advertising providers. These services may process necessary information according to their own privacy rules.
+Some features rely on third-party SDKs or services, including map, navigation, weather, sunset glow prediction, analytics, and advertising providers. Weather and sunset glow features may use AMap and Open-Meteo, and may send city information or coordinates to retrieve weather, cloud, visibility, humidity, precipitation, and sunset-time data. These services may process necessary information according to their own privacy rules.
 
 You can manage system permissions such as location, network, and tracking in iOS Settings. If you disable a permission, related features may not work normally, but other available features can still be used.
 

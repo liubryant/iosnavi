@@ -11,6 +11,27 @@ import UIKit
 import WebKit
 
 final class WebViewController: UIViewController {
+    private static let mobileFitJavaScript = #"""
+    (function() {
+      function applyMobileFit() {
+        var meta = document.querySelector('meta[name="viewport"]');
+        if (!meta) {
+          meta = document.createElement('meta');
+          meta.name = 'viewport';
+          document.head.appendChild(meta);
+        }
+        var width = Math.max(980, document.documentElement.scrollWidth || 0, document.body ? document.body.scrollWidth : 0);
+        meta.setAttribute('content', 'width=' + width + ', initial-scale=1.0, maximum-scale=3.0, user-scalable=yes');
+        if (document.body) {
+          document.body.style.webkitTextSizeAdjust = '100%';
+        }
+      }
+      applyMobileFit();
+      setTimeout(applyMobileFit, 500);
+      setTimeout(applyMobileFit, 1500);
+    })();
+    """#
+
 
     enum Content {
         /// 展示 Resources/Legal 下的本地长文本资源 (不含扩展名)
@@ -22,11 +43,18 @@ final class WebViewController: UIViewController {
     }
 
     private let content: Content
+    private let fullScreen: Bool
+    private let mobileOptimized: Bool
     private var textView: UITextView?
     private var webView: WKWebView?
+    private let backButton = UIButton(type: .system)
+    private let statusBarBackgroundView = UIView()
+    private var previousNavigationBarHidden = false
 
-    init(title: String, content: Content) {
+    init(title: String, content: Content, fullScreen: Bool = false, mobileOptimized: Bool = false) {
         self.content = content
+        self.fullScreen = fullScreen
+        self.mobileOptimized = mobileOptimized
         super.init(nibName: nil, bundle: nil)
         self.title = title
     }
@@ -38,7 +66,7 @@ final class WebViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = fullScreen ? .black : .systemBackground
 
         switch content {
         case .localText(let resourceName):
@@ -50,13 +78,29 @@ final class WebViewController: UIViewController {
         }
     }
 
+    override var prefersStatusBarHidden: Bool {
+        false
+    }
+
+    override var preferredStatusBarStyle: UIStatusBarStyle {
+        fullScreen ? .darkContent : .default
+    }
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        if fullScreen {
+            previousNavigationBarHidden = navigationController?.isNavigationBarHidden ?? false
+            navigationController?.setNavigationBarHidden(true, animated: animated)
+            setNeedsStatusBarAppearanceUpdate()
+        }
         UMengAnalytics.shared.pageBegin(title ?? "WebViewController")
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        if fullScreen {
+            navigationController?.setNavigationBarHidden(previousNavigationBarHidden, animated: animated)
+        }
         UMengAnalytics.shared.pageEnd(title ?? "WebViewController")
     }
 
@@ -95,17 +139,79 @@ final class WebViewController: UIViewController {
     // MARK: - 远程网页
 
     private func setupWebView(url: URL) {
-        let webView = WKWebView(frame: .zero)
+        let configuration = WKWebViewConfiguration()
+        if mobileOptimized {
+            configuration.userContentController.addUserScript(
+                WKUserScript(source: Self.mobileFitJavaScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+            )
+        }
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.isOpaque = false
+        webView.backgroundColor = fullScreen ? .black : .systemBackground
+        webView.scrollView.backgroundColor = fullScreen ? .black : .systemBackground
+        webView.scrollView.contentInsetAdjustmentBehavior = fullScreen ? .never : .automatic
+        if mobileOptimized {
+            webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+        }
         webView.translatesAutoresizingMaskIntoConstraints = false
+        if fullScreen {
+            setupFullScreenStatusBarBackground()
+        }
         view.addSubview(webView)
+        let topAnchor = view.safeAreaLayoutGuide.topAnchor
+        let bottomAnchor = fullScreen ? view.bottomAnchor : view.bottomAnchor
         NSLayoutConstraint.activate([
-            webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            webView.topAnchor.constraint(equalTo: topAnchor),
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            webView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            webView.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
         webView.load(URLRequest(url: url))
         self.webView = webView
+        if fullScreen {
+            setupFullScreenBackButton()
+        }
+    }
+
+    private func setupFullScreenStatusBarBackground() {
+        statusBarBackgroundView.translatesAutoresizingMaskIntoConstraints = false
+        statusBarBackgroundView.backgroundColor = .white
+        view.addSubview(statusBarBackgroundView)
+        NSLayoutConstraint.activate([
+            statusBarBackgroundView.topAnchor.constraint(equalTo: view.topAnchor),
+            statusBarBackgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            statusBarBackgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            statusBarBackgroundView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor)
+        ])
+    }
+
+    private func setupFullScreenBackButton() {
+        var configuration = UIButton.Configuration.filled()
+        configuration.image = UIImage(systemName: "chevron.left")
+        configuration.baseForegroundColor = .white
+        configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.52)
+        configuration.cornerStyle = .capsule
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
+        backButton.configuration = configuration
+        backButton.accessibilityLabel = L10n.t("common.back")
+        backButton.translatesAutoresizingMaskIntoConstraints = false
+        backButton.addTarget(self, action: #selector(tapBack), for: .touchUpInside)
+
+        view.addSubview(backButton)
+        NSLayoutConstraint.activate([
+            backButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            backButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            backButton.widthAnchor.constraint(equalToConstant: 42),
+            backButton.heightAnchor.constraint(equalToConstant: 42)
+        ])
+    }
+
+    @objc private func tapBack() {
+        if presentingViewController != nil {
+            dismiss(animated: true)
+        } else {
+            navigationController?.popViewController(animated: true)
+        }
     }
 
     // MARK: - 本地HTML
