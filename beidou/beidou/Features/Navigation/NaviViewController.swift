@@ -255,7 +255,7 @@ final class NaviViewController: UIViewController {
             titleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 64),
             titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -64),
 
-            closeButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor, constant: 8),
+            closeButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor, constant: 13),
             closeButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             closeButton.widthAnchor.constraint(equalToConstant: 30),
             closeButton.heightAnchor.constraint(equalToConstant: 30)
@@ -481,9 +481,46 @@ final class NaviViewController: UIViewController {
         alert.addAction(UIAlertAction(title: "播报模式：\(currentBroadcastMode.title)", style: .default) { [weak self] _ in
             self?.showBroadcastModeSettings()
         })
+        alert.addAction(UIAlertAction(title: "播报声音：\(TTSController.shared.currentVoiceName)", style: .default) { [weak self] _ in
+            self?.showNavigationVoiceSettings()
+        })
         alert.addAction(UIAlertAction(title: L10n.t("navi.exit"), style: .destructive) { [weak self] _ in
             self?.tapClose()
         })
+        alert.addAction(UIAlertAction(title: L10n.t("common.cancel"), style: .cancel))
+
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = view
+            popover.sourceRect = CGRect(x: view.bounds.midX, y: view.safeAreaInsets.top + 44, width: 1, height: 1)
+            popover.permittedArrowDirections = []
+        }
+
+        present(alert, animated: true)
+    }
+
+    private func showNavigationVoiceSettings() {
+        let tts = TTSController.shared
+        let voices = tts.availableChineseVoices
+        let alert = UIAlertController(
+            title: "播报声音",
+            message: voices.isEmpty ? "\n当前设备没有可用的中文系统语音" : "\n选择导航语音角色，已下载的系统声音会显示在这里",
+            preferredStyle: .actionSheet
+        )
+
+        let automaticPrefix = tts.isUsingAutomaticVoice ? "✓ " : ""
+        alert.addAction(UIAlertAction(title: "\(automaticPrefix)系统默认（黎潋优先）", style: .default) { _ in
+            tts.useAutomaticVoice()
+            tts.speak("已切换为系统默认导航语音，祝您一路平安。")
+        })
+
+        voices.forEach { voice in
+            let prefix = !tts.isUsingAutomaticVoice && voice.identifier == tts.currentVoiceIdentifier ? "✓ " : ""
+            alert.addAction(UIAlertAction(title: "\(prefix)\(voice.displayName)", style: .default) { _ in
+                tts.selectVoice(identifier: voice.identifier)
+                tts.speak("已切换为\(voice.name)，祝您一路平安。")
+            })
+        }
+
         alert.addAction(UIAlertAction(title: L10n.t("common.cancel"), style: .cancel))
 
         if let popover = alert.popoverPresentationController {
@@ -523,6 +560,10 @@ final class NaviViewController: UIViewController {
     fileprivate func speakNaviText(_ text: String) {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else { return }
+        // The navigation SDK may send service/quota errors through the same
+        // callback as turn instructions. They are not actionable while driving
+        // and must not be shown or spoken as navigation guidance.
+        guard !isRouteServiceFailureMessage(trimmedText) else { return }
 
         switch NaviBroadcastMode.current {
         case .muted:
@@ -536,6 +577,15 @@ final class NaviViewController: UIViewController {
             guard isKeyBroadcast(trimmedText) else { return }
             TTSController.shared.speak(trimmedText)
         }
+    }
+
+    private func isRouteServiceFailureMessage(_ text: String) -> Bool {
+        let normalized = text.lowercased()
+        let blockedPhrases = [
+            "算路失败", "路线规划失败", "路径规划失败",
+            "请求超出配额", "超出配额", "配额不足", "quota exceeded"
+        ]
+        return blockedPhrases.contains { normalized.contains($0.lowercased()) }
     }
 
     private func isLowPriorityBroadcast(_ text: String) -> Bool {

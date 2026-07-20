@@ -40,7 +40,10 @@ final class SideMenuViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        // Let a small amount of the map remain visible through the drawer while
+        // preserving enough contrast for all menu content.
+        view.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.94)
+        view.isOpaque = false
 
         let scrollView = UIScrollView()
         scrollView.translatesAutoresizingMaskIntoConstraints = false

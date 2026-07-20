@@ -660,7 +660,9 @@ final class MapViewController: UIViewController {
         configuration.subtitle = poi.address.isEmpty ? String(format: "%.6f, %.6f", poi.latitude, poi.longitude) : poi.address
         configuration.imagePadding = 10
         configuration.titleAlignment = .leading
-        configuration.baseForegroundColor = .label
+        // History items are supporting content; keep the icon and text slightly
+        // quieter than the primary search controls above them.
+        configuration.baseForegroundColor = UIColor.label.withAlphaComponent(0.68)
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0)
         button.configuration = configuration
         button.contentHorizontalAlignment = .leading
