@@ -45,6 +45,7 @@ final class WebViewController: UIViewController {
     private let content: Content
     private let fullScreen: Bool
     private let mobileOptimized: Bool
+    private let showsFullScreenTitle: Bool
     private var textView: UITextView?
     private var webView: WKWebView?
     private let backButton = UIButton(type: .system)
@@ -52,10 +53,17 @@ final class WebViewController: UIViewController {
     private let statusBarBackgroundView = UIView()
     private var previousNavigationBarHidden = false
 
-    init(title: String, content: Content, fullScreen: Bool = false, mobileOptimized: Bool = false) {
+    init(
+        title: String,
+        content: Content,
+        fullScreen: Bool = false,
+        mobileOptimized: Bool = false,
+        showsFullScreenTitle: Bool = true
+    ) {
         self.content = content
         self.fullScreen = fullScreen
         self.mobileOptimized = mobileOptimized
+        self.showsFullScreenTitle = showsFullScreenTitle
         super.init(nibName: nil, bundle: nil)
         self.title = title
     }
@@ -178,7 +186,9 @@ final class WebViewController: UIViewController {
         self.webView = webView
         if fullScreen {
             setupFullScreenBackButton()
-            setupFullScreenTitle()
+            if showsFullScreenTitle {
+                setupFullScreenTitle()
+            }
         }
     }
 

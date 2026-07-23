@@ -151,7 +151,10 @@ final class TTSController: NSObject {
 
     private func isExcludedVoice(_ voice: AVSpeechSynthesisVoice) -> Bool {
         let searchable = "\(voice.name) \(voice.identifier)".lowercased()
-        let excludedNames = ["eddy", "flo", "grandma", "grandpa", "reed"]
+        let excludedNames = [
+            "eddy", "flo", "grandma", "grandpa", "reed",
+            "rocko", "sandy", "shelly", "shelley"
+        ]
         return excludedNames.contains { searchable.contains($0) }
     }
 

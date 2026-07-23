@@ -1026,7 +1026,12 @@ final class MapViewController: UIViewController {
 
     @objc private func tapTyphoon() {
         guard let url = URL(string: UrlConstants.typhoonPath) else { return }
-        let controller = WebViewController(title: L10n.t("weather.typhoon_monitor_title"), content: .remoteURL(url), fullScreen: true)
+        let controller = WebViewController(
+            title: L10n.t("weather.typhoon_monitor_title"),
+            content: .remoteURL(url),
+            fullScreen: true,
+            showsFullScreenTitle: false
+        )
         controller.modalPresentationStyle = .fullScreen
         controller.modalPresentationCapturesStatusBarAppearance = true
         controller.modalTransitionStyle = .crossDissolve

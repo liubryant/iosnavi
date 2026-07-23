@@ -311,7 +311,7 @@ final class NaviViewController: UIViewController {
         overrideUserInterfaceStyle = shouldForceNightMode ? .dark : .unspecified
         let isDark = shouldForceNightMode || traitCollection.userInterfaceStyle == .dark
         view.backgroundColor = isDark ? .black : .systemBackground
-        titleLabel.textColor = isDark ? .black : .white
+        titleLabel.textColor = .white
         closeButton.tintColor = .white
         brandOverlayView.backgroundColor = isDark
             ? UIColor(white: 0.08, alpha: 0.90)
