@@ -14,9 +14,17 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
         willConnectTo session: UISceneSession,
         options connectionOptions: UIScene.ConnectionOptions
     ) {
+        if let url = connectionOptions.urlContexts.first?.url {
+            WidgetDeepLinkManager.shared.handle(url)
+        }
         if let shortcutItem = connectionOptions.shortcutItem {
             AppShortcutManager.handle(shortcutItem)
         }
+    }
+
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        guard let url = URLContexts.first?.url else { return }
+        WidgetDeepLinkManager.shared.handle(url)
     }
 
     func windowScene(

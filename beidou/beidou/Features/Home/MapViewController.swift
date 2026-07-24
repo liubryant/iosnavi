@@ -52,6 +52,7 @@ final class MapViewController: UIViewController {
     private let bottomSheetTemperatureLabel = UILabel()
     private let bottomSheetHistoryStack = UIStackView()
     private let bottomSheetShortcutStack = UIStackView()
+    private let bottomSheetSecondaryShortcutStack = UIStackView()
     private var bottomSheetHeightConstraint: NSLayoutConstraint?
     private var isBottomSheetExpanded = false
     private var isDraggingBottomSheet = false
@@ -476,6 +477,10 @@ final class MapViewController: UIViewController {
         bottomSheetShortcutStack.distribution = .fillEqually
         bottomSheetShortcutStack.spacing = 12
         bottomSheetShortcutStack.translatesAutoresizingMaskIntoConstraints = false
+        bottomSheetSecondaryShortcutStack.axis = .horizontal
+        bottomSheetSecondaryShortcutStack.distribution = .fillEqually
+        bottomSheetSecondaryShortcutStack.spacing = 12
+        bottomSheetSecondaryShortcutStack.translatesAutoresizingMaskIntoConstraints = false
 
         let cloudShortcut = makeBottomSheetShortcut(
             icon: "photo.on.rectangle.angled",
@@ -508,6 +513,37 @@ final class MapViewController: UIViewController {
         bottomSheetShortcutStack.addArrangedSubview(typhoonShortcut)
         bottomSheetShortcutStack.addArrangedSubview(sunsetShortcut)
 
+        let earthquakeShortcut = makeBottomSheetShortcut(
+            icon: "waveform.path.ecg.rectangle.fill",
+            title: L10n.t("home.earthquake_report"),
+            colors: [
+                UIColor(red: 0.14, green: 0.48, blue: 0.91, alpha: 1),
+                UIColor(red: 0.27, green: 0.70, blue: 0.88, alpha: 1)
+            ],
+            action: #selector(tapEarthquakeReport)
+        )
+        bottomSheetSecondaryShortcutStack.addArrangedSubview(earthquakeShortcut)
+        let moonShortcut = makeBottomSheetShortcut(
+            icon: "moon.stars.fill",
+            title: L10n.t("home.moon_phase"),
+            colors: [
+                UIColor(red: 0.25, green: 0.32, blue: 0.68, alpha: 1),
+                UIColor(red: 0.48, green: 0.38, blue: 0.82, alpha: 1)
+            ],
+            action: #selector(tapMoonPhase)
+        )
+        bottomSheetSecondaryShortcutStack.addArrangedSubview(moonShortcut)
+        let moreToolsShortcut = makeBottomSheetShortcut(
+            icon: "square.grid.2x2.fill",
+            title: L10n.t("home.more_tools"),
+            colors: [
+                UIColor(red: 0.91, green: 0.24, blue: 0.27, alpha: 1),
+                UIColor(red: 0.98, green: 0.49, blue: 0.25, alpha: 1)
+            ],
+            action: #selector(tapMoreTools)
+        )
+        bottomSheetSecondaryShortcutStack.addArrangedSubview(moreToolsShortcut)
+
         let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handleBottomSheetPan(_:)))
         bottomSearchSheet.addGestureRecognizer(panGesture)
 
@@ -520,6 +556,7 @@ final class MapViewController: UIViewController {
         bottomSearchSheet.addSubview(bottomSheetAppIconContainer)
         bottomSearchSheet.addSubview(bottomSheetHistoryStack)
         bottomSearchSheet.addSubview(bottomSheetShortcutStack)
+        bottomSearchSheet.addSubview(bottomSheetSecondaryShortcutStack)
 
         let height = bottomSearchSheet.heightAnchor.constraint(equalToConstant: bottomSheetCollapsedHeight)
         bottomSheetHeightConstraint = height
@@ -589,7 +626,12 @@ final class MapViewController: UIViewController {
             bottomSheetShortcutStack.topAnchor.constraint(equalTo: bottomSheetHistoryStack.bottomAnchor, constant: 16),
             bottomSheetShortcutStack.leadingAnchor.constraint(equalTo: bottomSearchSheet.leadingAnchor, constant: 16),
             bottomSheetShortcutStack.trailingAnchor.constraint(equalTo: bottomSearchSheet.trailingAnchor, constant: -16),
-            bottomSheetShortcutStack.heightAnchor.constraint(equalToConstant: 58)
+            bottomSheetShortcutStack.heightAnchor.constraint(equalToConstant: 58),
+
+            bottomSheetSecondaryShortcutStack.topAnchor.constraint(equalTo: bottomSheetShortcutStack.bottomAnchor, constant: 12),
+            bottomSheetSecondaryShortcutStack.leadingAnchor.constraint(equalTo: bottomSearchSheet.leadingAnchor, constant: 16),
+            bottomSheetSecondaryShortcutStack.trailingAnchor.constraint(equalTo: bottomSearchSheet.trailingAnchor, constant: -16),
+            bottomSheetSecondaryShortcutStack.heightAnchor.constraint(equalToConstant: 58)
         ])
 
         reloadBottomSheetHistory()
@@ -602,7 +644,7 @@ final class MapViewController: UIViewController {
     }
 
     private var bottomSheetExpandedHeight: CGFloat {
-        min(360 + view.safeAreaInsets.bottom, view.bounds.height * 0.58)
+        min(430 + view.safeAreaInsets.bottom, view.bounds.height * 0.68)
     }
 
     private func makeBottomSheetShortcut(icon: String, title: String, colors: [UIColor], action: Selector) -> UIControl {
@@ -705,6 +747,7 @@ final class MapViewController: UIViewController {
         let alpha = min(max(progress, 0), 1)
         bottomSheetHistoryStack.alpha = alpha
         bottomSheetShortcutStack.alpha = alpha
+        bottomSheetSecondaryShortcutStack.alpha = alpha
     }
 
     private func bottomSheetExpansionProgress(for height: CGFloat) -> CGFloat {
@@ -1036,6 +1079,64 @@ final class MapViewController: UIViewController {
         controller.modalPresentationCapturesStatusBarAppearance = true
         controller.modalTransitionStyle = .crossDissolve
         present(controller, animated: true)
+    }
+
+    @objc private func tapEarthquakeReport() {
+        navigationController?.pushViewController(EarthquakeViewController(), animated: true)
+    }
+
+    @objc private func tapMoonPhase() {
+        navigationController?.pushViewController(MoonPhaseViewController(), animated: true)
+    }
+
+    @objc private func tapMoreTools(_ sender: UIControl) {
+        let sheet = UIAlertController(
+            title: L10n.t("home.more_tools"),
+            message: nil,
+            preferredStyle: .actionSheet
+        )
+        let nearbyAction = UIAlertAction(title: "周边搜索", style: .default) { [weak self] _ in
+            guard let self else { return }
+            self.navigationController?.pushViewController(
+                PoiAroundSearchViewController(location: self.currentLocation),
+                animated: true
+            )
+        }
+        nearbyAction.setValue(UIImage(systemName: "mappin.and.ellipse"), forKey: "image")
+        sheet.addAction(nearbyAction)
+
+        let weatherAction = UIAlertAction(title: "天气查询", style: .default) { [weak self] _ in
+            guard let self else { return }
+            self.navigationController?.pushViewController(
+                WeatherViewController(location: self.currentLocation),
+                animated: true
+            )
+        }
+        weatherAction.setValue(UIImage(systemName: "cloud.sun.fill"), forKey: "image")
+        sheet.addAction(weatherAction)
+
+        let metroAction = UIAlertAction(title: "世界地铁", style: .default) { [weak self] _ in
+            self?.navigationController?.pushViewController(MetroViewController(), animated: true)
+        }
+        metroAction.setValue(UIImage(systemName: "tram.fill"), forKey: "image")
+        sheet.addAction(metroAction)
+
+        let panoramaAction = UIAlertAction(title: "全景街景", style: .default) { [weak self] _ in
+            guard let self else { return }
+            let coordinate = self.currentBD09Coordinate()
+            self.navigationController?.pushViewController(
+                PanoramaViewController(latitude: coordinate.latitude, longitude: coordinate.longitude),
+                animated: true
+            )
+        }
+        panoramaAction.setValue(UIImage(systemName: "binoculars.fill"), forKey: "image")
+        sheet.addAction(panoramaAction)
+        sheet.addAction(UIAlertAction(title: L10n.t("common.cancel"), style: .cancel))
+        if let popover = sheet.popoverPresentationController {
+            popover.sourceView = sender
+            popover.sourceRect = sender.bounds
+        }
+        present(sheet, animated: true)
     }
 
     @objc private func tapTraffic() {

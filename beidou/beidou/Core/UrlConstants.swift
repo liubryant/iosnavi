@@ -29,4 +29,13 @@ enum UrlConstants {
 
     /// 四创科技 - 台风实时路径专业版 H5
     static let typhoonPath = "https://tf.istrongcloud.com/release/index-sc.html"
+
+    /// 地震实时数据源。依次使用 USGS 主源和 EMSC 备用源。
+    static let earthquakeFeeds = [
+        "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson",
+        "https://www.seismicportal.eu/fdsnws/event/1/query?format=json&limit=200"
+    ]
+
+    /// Star Walk 简体中文月相日历。
+    static let moonCalendar = "https://starwalk.space/zh-Hans/moon-calendar"
 }

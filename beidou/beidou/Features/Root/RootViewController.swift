@@ -123,6 +123,12 @@ final class RootViewController: UIViewController {
             name: CloudPanoramaNotificationManager.openScenicNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(widgetOpenDestination),
+            name: WidgetDeepLinkManager.openDestinationNotification,
+            object: nil
+        )
     }
 
     @objc private func appDidEnterBackground() {
@@ -161,6 +167,10 @@ final class RootViewController: UIViewController {
 
     @objc private func cloudPanoramaNotificationOpenScenic() {
         handlePendingCloudPanoramaNotificationIfPossible()
+    }
+
+    @objc private func widgetOpenDestination() {
+        handlePendingWidgetDestinationIfPossible()
     }
 
     private var isNavigationProtectedFromHotSplash: Bool {
@@ -239,6 +249,48 @@ final class RootViewController: UIViewController {
         DispatchQueue.main.async { [weak self] in
             self?.handlePendingShortcutIfPossible()
             self?.handlePendingCloudPanoramaNotificationIfPossible()
+            self?.handlePendingWidgetDestinationIfPossible()
+        }
+    }
+
+    private func handlePendingWidgetDestinationIfPossible() {
+        guard WidgetDeepLinkManager.shared.pendingDestination != nil else { return }
+        guard SpUtil.bool(.agreementAccepted) else { return }
+        guard !(currentChild is AgreementViewController),
+              !(currentChild is SplashViewController),
+              !isShowingHotSplash,
+              let navigationController = currentChild as? UINavigationController,
+              let destination = WidgetDeepLinkManager.shared.consumePendingDestination() else {
+            return
+        }
+
+        navigationController.dismiss(animated: false)
+        switch destination {
+        case .map:
+            navigationController.popToRootViewController(animated: true)
+        case .cloud:
+            pushCloudPanorama(on: navigationController)
+        case .typhoon:
+            guard let url = URL(string: UrlConstants.typhoonPath) else { return }
+            let controller = WebViewController(
+                title: L10n.t("weather.typhoon_monitor_title"),
+                content: .remoteURL(url),
+                fullScreen: true,
+                showsFullScreenTitle: false
+            )
+            controller.modalPresentationStyle = .fullScreen
+            controller.modalPresentationCapturesStatusBarAppearance = true
+            controller.modalTransitionStyle = .crossDissolve
+            navigationController.present(controller, animated: true)
+        case .sunset:
+            navigationController.pushViewController(
+                WeatherViewController(location: LocationManager.shared.lastKnownLocation),
+                animated: true
+            )
+        case .earthquake:
+            navigationController.pushViewController(EarthquakeViewController(), animated: true)
+        case .moon:
+            navigationController.pushViewController(MoonPhaseViewController(), animated: true)
         }
     }
 

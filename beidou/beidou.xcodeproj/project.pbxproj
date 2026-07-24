@@ -7,14 +7,49 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2A24D42AAE47B17400966A5D /* NaviWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 33E2A874B8E6F39AE732042C /* NaviWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		4C868060D5EC4C29B6DEB3EB /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F32C0CB0A2568D7CC13D0118 /* WidgetKit.framework */; };
+		67BDBD079D3192140C0A1E0E /* NaviWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9E50F4B68E18261B8CBC312 /* NaviWidgets.swift */; };
+		6BA6E8FA3EB14BCA6345F50C /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3E4F9A3E788F072CD944AFAD /* SwiftUI.framework */; };
 		8CE8BFF14DA7917188CD2116 /* Pods_beidou.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EE73346B0748E6F7492897DA /* Pods_beidou.framework */; };
+		EE45A85B7F1D5773B83A020C /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F3795F649A9D1FCE589D192A /* Foundation.framework */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		49F6AD862FC34CECD2D69F15 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DD3006CC2FD9954F000832DD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6E274EA8B1915DB183CC8DD9;
+			remoteInfo = NaviWidgets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		7FB1BA88B8FDB081237D3DAE /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				2A24D42AAE47B17400966A5D /* NaviWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		33E2A874B8E6F39AE732042C /* NaviWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NaviWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		3E4F9A3E788F072CD944AFAD /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = "<group>"; };
 		6824430FE0EEDE688C22C7F7 /* Pods-beidou.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-beidou.release.xcconfig"; path = "Target Support Files/Pods-beidou/Pods-beidou.release.xcconfig"; sourceTree = "<group>"; };
+		B9E50F4B68E18261B8CBC312 /* NaviWidgets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NaviWidgets.swift; sourceTree = "<group>"; };
 		BC1FADF56EBCF5559E531933 /* Pods-beidou.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-beidou.debug.xcconfig"; path = "Target Support Files/Pods-beidou/Pods-beidou.debug.xcconfig"; sourceTree = "<group>"; };
 		DD3006D42FD9954F000832DD /* beidou.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = beidou.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EE73346B0748E6F7492897DA /* Pods_beidou.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_beidou.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		F32C0CB0A2568D7CC13D0118 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = "<group>"; };
+		F3795F649A9D1FCE589D192A /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		F7C29C967C2C33A6D9EE7099 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -39,6 +74,16 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		4C39F526DEA7C4917DD90553 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EE45A85B7F1D5773B83A020C /* Foundation.framework in Frameworks */,
+				4C868060D5EC4C29B6DEB3EB /* WidgetKit.framework in Frameworks */,
+				6BA6E8FA3EB14BCA6345F50C /* SwiftUI.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		DD3006D12FD9954F000832DD /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -50,10 +95,23 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		922805043CC981D1622FED90 /* NaviWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				B9E50F4B68E18261B8CBC312 /* NaviWidgets.swift */,
+				F7C29C967C2C33A6D9EE7099 /* Info.plist */,
+			);
+			name = NaviWidgets;
+			path = NaviWidgets;
+			sourceTree = "<group>";
+		};
 		A8623866A73397F5055FA7B4 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				EE73346B0748E6F7492897DA /* Pods_beidou.framework */,
+				DC5C707A2F82F3BEB14D76D4 /* iOS */,
+				F32C0CB0A2568D7CC13D0118 /* WidgetKit.framework */,
+				3E4F9A3E788F072CD944AFAD /* SwiftUI.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -67,6 +125,14 @@
 			path = Pods;
 			sourceTree = "<group>";
 		};
+		DC5C707A2F82F3BEB14D76D4 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				F3795F649A9D1FCE589D192A /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
 		DD3006CB2FD9954F000832DD = {
 			isa = PBXGroup;
 			children = (
@@ -74,6 +140,7 @@
 				DD3006D52FD9954F000832DD /* Products */,
 				B993200EA3295FB02FF4442B /* Pods */,
 				A8623866A73397F5055FA7B4 /* Frameworks */,
+				922805043CC981D1622FED90 /* NaviWidgets */,
 			);
 			sourceTree = "<group>";
 		};
@@ -81,6 +148,7 @@
 			isa = PBXGroup;
 			children = (
 				DD3006D42FD9954F000832DD /* beidou.app */,
+				33E2A874B8E6F39AE732042C /* NaviWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -88,6 +156,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		6E274EA8B1915DB183CC8DD9 /* NaviWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 88434EBEBA54F42D8F0E90C1 /* Build configuration list for PBXNativeTarget "NaviWidgets" */;
+			buildPhases = (
+				2A7A7121A5184C3EB05941C0 /* Sources */,
+				4C39F526DEA7C4917DD90553 /* Frameworks */,
+				A54A3E96AF5BA9B2723E3617 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = NaviWidgets;
+			productName = NaviWidgets;
+			productReference = 33E2A874B8E6F39AE732042C /* NaviWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		DD3006D32FD9954F000832DD /* beidou */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = DD3006E12FD9954F000832DD /* Build configuration list for PBXNativeTarget "beidou" */;
@@ -97,10 +182,12 @@
 				DD3006D12FD9954F000832DD /* Frameworks */,
 				DD3006D22FD9954F000832DD /* Resources */,
 				50D963652852350A7DD72C33 /* [CP] Copy Pods Resources */,
+				7FB1BA88B8FDB081237D3DAE /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				4FF50BF31D45B1A732EFA756 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				DD3006D62FD9954F000832DD /* beidou */,
@@ -141,11 +228,19 @@
 			projectRoot = "";
 			targets = (
 				DD3006D32FD9954F000832DD /* beidou */,
+				6E274EA8B1915DB183CC8DD9 /* NaviWidgets */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		A54A3E96AF5BA9B2723E3617 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		DD3006D22FD9954F000832DD /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -202,6 +297,14 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		2A7A7121A5184C3EB05941C0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				67BDBD079D3192140C0A1E0E /* NaviWidgets.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		DD3006D02FD9954F000832DD /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -211,7 +314,59 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		4FF50BF31D45B1A732EFA756 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = NaviWidgets;
+			target = 6E274EA8B1915DB183CC8DD9 /* NaviWidgets */;
+			targetProxy = 49F6AD862FC34CECD2D69F15 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		678EC18F43C3CE11D89FF040 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 46;
+				DEVELOPMENT_TEAM = MF7G4UB9D9;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = NaviWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.4.0;
+				PRODUCT_BUNDLE_IDENTIFIER = cn.navibeidou.beidou.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AD14922F5E14339993B885F3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 46;
+				DEVELOPMENT_TEAM = MF7G4UB9D9;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = NaviWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.4.0;
+				PRODUCT_BUNDLE_IDENTIFIER = cn.navibeidou.beidou.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		DD3006DF2FD9954F000832DD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -437,6 +592,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		88434EBEBA54F42D8F0E90C1 /* Build configuration list for PBXNativeTarget "NaviWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AD14922F5E14339993B885F3 /* Release */,
+				678EC18F43C3CE11D89FF040 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		DD3006CF2FD9954F000832DD /* Build configuration list for PBXProject "beidou" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

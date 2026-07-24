@@ -24,6 +24,9 @@
 "home.search_here" = "在此处搜索";
 "home.cloud_panorama" = "720云";
 "home.sunset_glow" = "火烧云";
+"home.earthquake_report" = "地震速报";
+"home.moon_phase" = "月相查询";
+"home.more_tools" = "更多工具";
 "home.bottom_label" = "卫星定位导航系统";
 "home.coordinate_format" = "%@\n纬度：%.6f\n经度：%.6f\n海拔：%@";
 "home.altitude_value_format" = "%.1f 米";

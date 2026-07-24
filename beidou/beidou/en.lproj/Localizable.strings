@@ -24,6 +24,9 @@
 "home.search_here" = "Search Here";
 "home.cloud_panorama" = "720 Cloud";
 "home.sunset_glow" = "Sunset";
+"home.earthquake_report" = "Earthquakes";
+"home.moon_phase" = "Moon Phases";
+"home.more_tools" = "More Tools";
 "home.bottom_label" = "Satellite Navigation System";
 "home.coordinate_format" = "%@\nLatitude: %.6f\nLongitude: %.6f\nAltitude: %@";
 "home.altitude_value_format" = "%.1f m";
