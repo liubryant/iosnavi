@@ -36,6 +36,8 @@ final class RoutePlanViewController: UIViewController {
     private let topWeatherIconView = UIImageView()
     private var modeButtons: [NaviMode: UIButton] = [:]
     private let feedAdContainer = UIView()
+    private let homePlaceButton = UIButton(type: .system)
+    private let workPlaceButton = UIButton(type: .system)
 
     init(startLocation: CurrentLocation? = nil, endLocation: CurrentLocation? = nil, destinationPOI: SelectedPOI? = nil) {
         self.startLocation = startLocation
@@ -72,6 +74,7 @@ final class RoutePlanViewController: UIViewController {
         setupCloseButton()
         let card = setupInputCard()
         let modeRow = setupModeButtons()
+        let savedPlacesRow = setupSavedPlacesRow()
         let actionRow = setupActionButtons()
         setupFeedAdContainer()
 
@@ -80,11 +83,12 @@ final class RoutePlanViewController: UIViewController {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scrollView)
 
-        let stack = UIStackView(arrangedSubviews: [card, modeRow, actionRow, feedAdContainer])
+        let stack = UIStackView(arrangedSubviews: [card, modeRow, savedPlacesRow, actionRow, feedAdContainer])
         stack.axis = .vertical
         stack.spacing = 14
         stack.translatesAutoresizingMaskIntoConstraints = false
         stack.setCustomSpacing(22, after: modeRow)
+        stack.setCustomSpacing(28, after: savedPlacesRow)
         stack.setCustomSpacing(30, after: actionRow)
         scrollView.addSubview(stack)
         NSLayoutConstraint.activate([
@@ -125,6 +129,7 @@ final class RoutePlanViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        updateSavedPlaceButtons()
         UMengAnalytics.shared.pageBegin("RoutePlanViewController")
     }
 
@@ -382,6 +387,66 @@ final class RoutePlanViewController: UIViewController {
     }
 
     // MARK: - 附近街景 / 开始导航
+
+    private func setupSavedPlacesRow() -> UIView {
+        configureSavedPlaceButton(homePlaceButton, icon: "house.fill", action: #selector(tapHomePlace))
+        configureSavedPlaceButton(workPlaceButton, icon: "briefcase.fill", action: #selector(tapWorkPlace))
+
+        let editButton = UIButton(type: .system)
+        var editConfiguration = UIButton.Configuration.tinted()
+        editConfiguration.title = L10n.t("places.edit")
+        editConfiguration.image = UIImage(systemName: "slider.horizontal.3")
+        editConfiguration.imagePlacement = .leading
+        editConfiguration.imagePadding = 6
+        editConfiguration.cornerStyle = .medium
+        editConfiguration.baseForegroundColor = .systemBlue
+        editConfiguration.titleLineBreakMode = .byTruncatingTail
+        editConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
+        editButton.configuration = editConfiguration
+        editButton.heightAnchor.constraint(equalToConstant: 64).isActive = true
+        editButton.addTarget(self, action: #selector(tapEditPlaces), for: .touchUpInside)
+
+        let stack = UIStackView(arrangedSubviews: [homePlaceButton, workPlaceButton, editButton])
+        stack.axis = .horizontal
+        stack.distribution = .fillEqually
+        stack.spacing = 10
+        updateSavedPlaceButtons()
+        return stack
+    }
+
+    private func configureSavedPlaceButton(_ button: UIButton, icon: String, action: Selector) {
+        var configuration = UIButton.Configuration.tinted()
+        configuration.image = UIImage(systemName: icon)
+        configuration.imagePlacement = .leading
+        configuration.imagePadding = 6
+        configuration.cornerStyle = .medium
+        configuration.baseForegroundColor = .systemBlue
+        configuration.titleAlignment = .leading
+        configuration.titleLineBreakMode = .byTruncatingTail
+        configuration.subtitleLineBreakMode = .byTruncatingTail
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
+        button.configuration = configuration
+        button.titleLabel?.numberOfLines = 1
+        button.titleLabel?.lineBreakMode = .byTruncatingTail
+        button.heightAnchor.constraint(equalToConstant: 64).isActive = true
+        button.addTarget(self, action: action, for: .touchUpInside)
+    }
+
+    private func updateSavedPlaceButtons() {
+        updateSavedPlaceButton(homePlaceButton, kind: .home)
+        updateSavedPlaceButton(workPlaceButton, kind: .work)
+    }
+
+    private func updateSavedPlaceButton(_ button: UIButton, kind: SavedPlaceKind) {
+        var configuration = button.configuration
+        configuration?.title = kind.title
+        if let place = SavedPlaceStore.place(for: kind) {
+            configuration?.subtitle = place.name
+        } else {
+            configuration?.subtitle = L10n.t("places.not_set_short")
+        }
+        button.configuration = configuration
+    }
 
     private func setupActionButtons() -> UIView {
         let nearButton = UIButton(type: .system)
@@ -678,6 +743,33 @@ final class RoutePlanViewController: UIViewController {
         let coordinate = currentBD09Coordinate()
         navigationController?.pushViewController(
             PanoramaViewController(latitude: coordinate.latitude, longitude: coordinate.longitude),
+            animated: true
+        )
+    }
+
+    @objc private func tapHomePlace() {
+        navigateToSavedPlace(.home)
+    }
+
+    @objc private func tapWorkPlace() {
+        navigateToSavedPlace(.work)
+    }
+
+    @objc private func tapEditPlaces() {
+        navigationController?.pushViewController(
+            SavedPlacesViewController(currentLocation: startLocation),
+            animated: true
+        )
+    }
+
+    private func navigateToSavedPlace(_ kind: SavedPlaceKind) {
+        guard let place = SavedPlaceStore.place(for: kind) else {
+            tapEditPlaces()
+            return
+        }
+        POIHistoryStore.save(place)
+        navigationController?.pushViewController(
+            NaviViewController(start: currentLocationPOI(), end: place, mode: .drive),
             animated: true
         )
     }

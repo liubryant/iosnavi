@@ -65,6 +65,13 @@ final class MapViewController: UIViewController {
     private var hasCenteredInitialLocation = false
     private var userDidMoveMap = false
     private let defaultZoomLevel: Float = 18
+    private let headingManager = CLLocationManager()
+    private var currentHeading: CLLocationDirection = 0
+
+    #if canImport(BaiduMapAPI_Map)
+    private var currentLocationAnnotation: BMKPointAnnotation?
+    private weak var currentLocationAnnotationView: HeadingLocationAnnotationView?
+    #endif
 
     init(sideMenuViewController: SideMenuViewController) {
         self.sideMenuVC = sideMenuViewController
@@ -87,6 +94,7 @@ final class MapViewController: UIViewController {
         setupLeftButtons()
         setupBottomLabel()
         setupBottomSearchSheet()
+        setupHeadingUpdates()
 
         applyMapType(.satellite)
         refreshLocation(shouldCenterMap: true)
@@ -98,6 +106,7 @@ final class MapViewController: UIViewController {
         mapView.delegate = self
         mapView.viewWillAppear()
         #endif
+        startHeadingUpdates()
         UMengAnalytics.shared.pageBegin("MapViewController")
         reloadBottomSheetHistory()
         applyCachedBottomSheetWeather()
@@ -124,6 +133,7 @@ final class MapViewController: UIViewController {
         mapView.viewWillDisappear()
         mapView.delegate = nil
         #endif
+        headingManager.stopUpdatingHeading()
         UMengAnalytics.shared.pageEnd("MapViewController")
     }
 
@@ -797,6 +807,45 @@ final class MapViewController: UIViewController {
 
     // MARK: - 定位
 
+    private func setupHeadingUpdates() {
+        guard CLLocationManager.headingAvailable() else { return }
+        headingManager.delegate = self
+        headingManager.headingFilter = 1
+        updateHeadingOrientation()
+    }
+
+    private func startHeadingUpdates() {
+        guard CLLocationManager.headingAvailable() else { return }
+        updateHeadingOrientation()
+        headingManager.startUpdatingHeading()
+    }
+
+    private func updateHeadingOrientation() {
+        guard let orientation = view.window?.windowScene?.interfaceOrientation else {
+            headingManager.headingOrientation = .portrait
+            return
+        }
+        switch orientation {
+        case .portrait:
+            headingManager.headingOrientation = .portrait
+        case .portraitUpsideDown:
+            headingManager.headingOrientation = .portraitUpsideDown
+        case .landscapeLeft:
+            headingManager.headingOrientation = .landscapeLeft
+        case .landscapeRight:
+            headingManager.headingOrientation = .landscapeRight
+        default:
+            headingManager.headingOrientation = .portrait
+        }
+    }
+
+    private func updateLocationHeading(animated: Bool) {
+        #if canImport(BaiduMapAPI_Map)
+        let mapRelativeHeading = currentHeading - CLLocationDirection(mapView.rotation)
+        currentLocationAnnotationView?.setHeading(mapRelativeHeading, animated: animated)
+        #endif
+    }
+
     private func refreshLocation(shouldCenterMap: Bool) {
         LocationManager.shared.requestAuthorization()
 
@@ -972,12 +1021,15 @@ final class MapViewController: UIViewController {
 
     private func resetCurrentLocationAnnotation(at coordinate: CLLocationCoordinate2D) {
         #if canImport(BaiduMapAPI_Map)
-        if let annotations = mapView.annotations {
-            mapView.removeAnnotations(annotations)
+        if let annotation = currentLocationAnnotation {
+            annotation.coordinate = coordinate
+            return
         }
+
         let annotation = BMKPointAnnotation()
         annotation.coordinate = coordinate
         annotation.title = L10n.t("common.my_location")
+        currentLocationAnnotation = annotation
         mapView.addAnnotation(annotation)
         #endif
     }
@@ -1095,15 +1147,11 @@ final class MapViewController: UIViewController {
             message: nil,
             preferredStyle: .actionSheet
         )
-        let nearbyAction = UIAlertAction(title: "周边搜索", style: .default) { [weak self] _ in
-            guard let self else { return }
-            self.navigationController?.pushViewController(
-                PoiAroundSearchViewController(location: self.currentLocation),
-                animated: true
-            )
+        let tideAction = UIAlertAction(title: L10n.t("tide.today_title"), style: .default) { [weak self] _ in
+            self?.navigationController?.pushViewController(TodayTideViewController(), animated: true)
         }
-        nearbyAction.setValue(UIImage(systemName: "mappin.and.ellipse"), forKey: "image")
-        sheet.addAction(nearbyAction)
+        tideAction.setValue(UIImage(systemName: "water.waves"), forKey: "image")
+        sheet.addAction(tideAction)
 
         let weatherAction = UIAlertAction(title: "天气查询", style: .default) { [weak self] _ in
             guard let self else { return }
@@ -1267,21 +1315,146 @@ extension MapViewController: BMKMapViewDelegate {
         }
     }
 
+    func mapView(_ mapView: BMKMapView, regionDidChangeAnimated animated: Bool, reason: BMKRegionChangeReason) {
+        updateLocationHeading(animated: animated)
+    }
+
     func mapView(_ mapView: BMKMapView, viewFor annotation: BMKAnnotation) -> BMKAnnotationView? {
-        guard annotation is BMKPointAnnotation else { return nil }
+        guard let currentLocationAnnotation,
+              annotation as AnyObject === currentLocationAnnotation else {
+            return nil
+        }
+
         let identifier = "currentLocation"
-        var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? BMKPinAnnotationView
+        var annotationView = mapView.dequeueReusableAnnotationView(
+            withIdentifier: identifier
+        ) as? HeadingLocationAnnotationView
         if annotationView == nil {
-            annotationView = BMKPinAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+            annotationView = HeadingLocationAnnotationView(annotation: annotation, reuseIdentifier: identifier)
         } else {
             annotationView?.annotation = annotation
         }
-        annotationView?.pinColor = UInt(BMKPinAnnotationColorPurple)
-        annotationView?.animatesDrop = false
+
+        currentLocationAnnotationView = annotationView
+        annotationView?.setHeading(
+            currentHeading - CLLocationDirection(mapView.rotation),
+            animated: false
+        )
         return annotationView
     }
 }
+
+private final class HeadingLocationAnnotationView: BMKAnnotationView {
+    private let directionFadeLayers: [CAShapeLayer] = (0..<32).map { _ in CAShapeLayer() }
+    private let borderLayer = CAShapeLayer()
+    private let dotLayer = CAShapeLayer()
+    private var displayedHeading: CGFloat = 0
+
+    override init!(annotation: BMKAnnotation!, reuseIdentifier: String!) {
+        super.init(annotation: annotation, reuseIdentifier: reuseIdentifier)
+
+        bounds = CGRect(x: 0, y: 0, width: 104, height: 104)
+        backgroundColor = .clear
+        isUserInteractionEnabled = false
+
+        for (index, fadeLayer) in directionFadeLayers.enumerated() {
+            let progress = CGFloat(index) / CGFloat(directionFadeLayers.count - 1)
+            let alpha = 0.76 * pow(1 - progress, 1.35)
+            fadeLayer.fillColor = UIColor.systemBlue.withAlphaComponent(alpha).cgColor
+            layer.addSublayer(fadeLayer)
+        }
+
+        borderLayer.fillColor = UIColor.white.cgColor
+        borderLayer.shadowColor = UIColor.black.cgColor
+        borderLayer.shadowOpacity = 0.22
+        borderLayer.shadowRadius = 2
+        borderLayer.shadowOffset = CGSize(width: 0, height: 1)
+        layer.addSublayer(borderLayer)
+
+        dotLayer.fillColor = UIColor.systemBlue.cgColor
+        layer.addSublayer(dotLayer)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        let startAngle = -CGFloat.pi * 0.65
+        let endAngle = -CGFloat.pi * 0.35
+        let innerRadius: CGFloat = 7
+        let outerRadius: CGFloat = 49
+        let ringWidth = (outerRadius - innerRadius) / CGFloat(directionFadeLayers.count)
+        for (index, fadeLayer) in directionFadeLayers.enumerated() {
+            fadeLayer.frame = bounds
+            let ringInnerRadius = innerRadius + CGFloat(index) * ringWidth
+            let ringOuterRadius = ringInnerRadius + ringWidth + 0.35
+            let path = UIBezierPath()
+            path.addArc(
+                withCenter: center,
+                radius: ringOuterRadius,
+                startAngle: startAngle,
+                endAngle: endAngle,
+                clockwise: true
+            )
+            path.addArc(
+                withCenter: center,
+                radius: ringInnerRadius,
+                startAngle: endAngle,
+                endAngle: startAngle,
+                clockwise: false
+            )
+            path.close()
+            fadeLayer.path = path.cgPath
+        }
+
+        borderLayer.path = UIBezierPath(
+            ovalIn: CGRect(x: center.x - 10, y: center.y - 10, width: 20, height: 20)
+        ).cgPath
+        dotLayer.path = UIBezierPath(
+            ovalIn: CGRect(x: center.x - 7, y: center.y - 7, width: 14, height: 14)
+        ).cgPath
+    }
+
+    func setHeading(_ heading: CLLocationDirection, animated: Bool) {
+        let target = CGFloat(heading * .pi / 180)
+        var delta = target - displayedHeading
+        while delta > .pi { delta -= .pi * 2 }
+        while delta < -.pi { delta += .pi * 2 }
+        displayedHeading += delta
+
+        let changes = {
+            self.transform = CGAffineTransform(rotationAngle: self.displayedHeading)
+        }
+        if animated {
+            UIView.animate(
+                withDuration: 0.22,
+                delay: 0,
+                options: [.beginFromCurrentState, .curveEaseOut, .allowUserInteraction],
+                animations: changes
+            )
+        } else {
+            changes()
+        }
+    }
+}
 #endif
+
+extension MapViewController: CLLocationManagerDelegate {
+    func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        guard newHeading.headingAccuracy >= 0 else { return }
+        currentHeading = newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
+        updateLocationHeading(animated: true)
+    }
+
+    func locationManagerShouldDisplayHeadingCalibration(_ manager: CLLocationManager) -> Bool {
+        false
+    }
+}
 
 private final class GradientShortcutControl: UIControl {
     private let gradientLayer = CAGradientLayer()

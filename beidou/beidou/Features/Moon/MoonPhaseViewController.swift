@@ -186,6 +186,7 @@ final class MoonPhaseViewController: UIViewController {
         titleLabel.layer.shadowRadius = 3
         titleLabel.layer.shadowOffset = CGSize(width: 0, height: 1)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.isHidden = true
 
         view.addSubview(backButton)
         view.addSubview(titleLabel)

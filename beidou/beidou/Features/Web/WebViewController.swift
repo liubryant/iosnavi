@@ -11,6 +11,13 @@ import UIKit
 import WebKit
 
 final class WebViewController: UIViewController {
+    private static let typhoonPageBackgroundColor = UIColor(
+        red: 253.0 / 255.0,
+        green: 250.0 / 255.0,
+        blue: 245.0 / 255.0,
+        alpha: 1
+    )
+
     private static let mobileFitJavaScript = #"""
     (function() {
       function applyMobileFit() {
@@ -75,7 +82,7 @@ final class WebViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = fullScreen ? Self.typhoonPageBackgroundColor : .systemBackground
 
         switch content {
         case .localText(let resourceName):
@@ -101,15 +108,22 @@ final class WebViewController: UIViewController {
         if fullScreen {
             previousNavigationBarHidden = navigationController?.isNavigationBarHidden ?? false
             navigationController?.setNavigationBarHidden(true, animated: animated)
+            installFullScreenStatusBarBackground()
             setNeedsStatusBarAppearanceUpdate()
         }
         UMengAnalytics.shared.pageBegin(title ?? "WebViewController")
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        installFullScreenStatusBarBackground()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         if fullScreen {
             navigationController?.setNavigationBarHidden(previousNavigationBarHidden, animated: animated)
+            statusBarBackgroundView.removeFromSuperview()
         }
         UMengAnalytics.shared.pageEnd(title ?? "WebViewController")
     }
@@ -194,13 +208,24 @@ final class WebViewController: UIViewController {
 
     private func setupFullScreenStatusBarBackground() {
         statusBarBackgroundView.translatesAutoresizingMaskIntoConstraints = false
-        statusBarBackgroundView.backgroundColor = .white
-        view.addSubview(statusBarBackgroundView)
+        statusBarBackgroundView.backgroundColor = Self.typhoonPageBackgroundColor
+        statusBarBackgroundView.isUserInteractionEnabled = false
+    }
+
+    private func installFullScreenStatusBarBackground() {
+        guard fullScreen,
+              let window = view.window,
+              statusBarBackgroundView.superview !== window else {
+            return
+        }
+
+        statusBarBackgroundView.removeFromSuperview()
+        window.addSubview(statusBarBackgroundView)
         NSLayoutConstraint.activate([
-            statusBarBackgroundView.topAnchor.constraint(equalTo: view.topAnchor),
-            statusBarBackgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            statusBarBackgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            statusBarBackgroundView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor)
+            statusBarBackgroundView.topAnchor.constraint(equalTo: window.topAnchor),
+            statusBarBackgroundView.leadingAnchor.constraint(equalTo: window.leadingAnchor),
+            statusBarBackgroundView.trailingAnchor.constraint(equalTo: window.trailingAnchor),
+            statusBarBackgroundView.bottomAnchor.constraint(equalTo: window.safeAreaLayoutGuide.topAnchor)
         ])
     }
 

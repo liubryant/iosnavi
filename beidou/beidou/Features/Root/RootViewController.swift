@@ -119,6 +119,12 @@ final class RootViewController: UIViewController {
         )
         NotificationCenter.default.addObserver(
             self,
+            selector: #selector(appShortcutNavigateSavedPlace),
+            name: AppShortcutManager.navigateSavedPlaceNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
             selector: #selector(cloudPanoramaNotificationOpenScenic),
             name: CloudPanoramaNotificationManager.openScenicNotification,
             object: nil
@@ -162,6 +168,10 @@ final class RootViewController: UIViewController {
     }
 
     @objc private func appShortcutCloudPanorama() {
+        handlePendingShortcutIfPossible()
+    }
+
+    @objc private func appShortcutNavigateSavedPlace() {
         handlePendingShortcutIfPossible()
     }
 
@@ -311,7 +321,9 @@ final class RootViewController: UIViewController {
     }
 
     private func handlePendingShortcutIfPossible() {
-        guard AppShortcutManager.hasPendingNavigateLastDestination || AppShortcutManager.hasPendingCloudPanorama else { return }
+        guard AppShortcutManager.hasPendingNavigateLastDestination ||
+                AppShortcutManager.hasPendingCloudPanorama ||
+                AppShortcutManager.pendingSavedPlaceKind != nil else { return }
         guard SpUtil.bool(.agreementAccepted) else { return }
         guard !(currentChild is AgreementViewController),
               !(currentChild is SplashViewController),
@@ -320,6 +332,17 @@ final class RootViewController: UIViewController {
         }
 
         if let navigationController = currentChild as? UINavigationController {
+            if let kind = AppShortcutManager.consumePendingSavedPlaceKind() {
+                if let destination = SavedPlaceStore.place(for: kind) {
+                    pushLastDestinationNavigation(on: navigationController, destination: destination)
+                } else {
+                    navigationController.pushViewController(
+                        SavedPlacesViewController(currentLocation: LocationManager.shared.lastKnownLocation),
+                        animated: true
+                    )
+                }
+                return
+            }
             if AppShortcutManager.hasPendingCloudPanorama {
                 AppShortcutManager.consumePendingCloudPanorama()
                 pushCloudPanorama(on: navigationController)

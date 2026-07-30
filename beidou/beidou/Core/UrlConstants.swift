@@ -38,4 +38,7 @@ enum UrlConstants {
 
     /// Star Walk 简体中文月相日历。
     static let moonCalendar = "https://starwalk.space/zh-Hans/moon-calendar"
+
+    /// 知潮潮汐移动网页。
+    static let todayTide = "https://www.zhichaoo.cn/"
 }

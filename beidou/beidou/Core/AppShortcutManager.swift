@@ -11,11 +11,15 @@ import UIKit
 enum AppShortcutManager {
     static let navigateLastDestinationType = "cn.navibeidou.beidou.shortcut.navigateLastDestination"
     static let cloudPanoramaType = "cn.navibeidou.beidou.shortcut.cloudPanorama"
+    static let navigateHomeType = "cn.navibeidou.beidou.shortcut.navigateHome"
+    static let navigateWorkType = "cn.navibeidou.beidou.shortcut.navigateWork"
     static let navigateLastDestinationNotification = Notification.Name("AppShortcutNavigateLastDestination")
     static let cloudPanoramaNotification = Notification.Name("AppShortcutCloudPanorama")
+    static let navigateSavedPlaceNotification = Notification.Name("AppShortcutNavigateSavedPlace")
 
     private static var pendingNavigateLastDestination = false
     private static var pendingCloudPanorama = false
+    private(set) static var pendingSavedPlaceKind: SavedPlaceKind?
 
     static var hasPendingNavigateLastDestination: Bool {
         pendingNavigateLastDestination
@@ -40,6 +44,28 @@ enum AppShortcutManager {
             )
         }
 
+        let home = SavedPlaceStore.place(for: .home)
+        items.append(
+            UIApplicationShortcutItem(
+                type: navigateHomeType,
+                localizedTitle: "回家",
+                localizedSubtitle: home?.name ?? "设置家的位置",
+                icon: UIApplicationShortcutIcon(systemImageName: "house.fill"),
+                userInfo: nil
+            )
+        )
+
+        let work = SavedPlaceStore.place(for: .work)
+        items.append(
+            UIApplicationShortcutItem(
+                type: navigateWorkType,
+                localizedTitle: "去公司",
+                localizedSubtitle: work?.name ?? "设置公司的位置",
+                icon: UIApplicationShortcutIcon(systemImageName: "briefcase.fill"),
+                userInfo: nil
+            )
+        )
+
         items.append(
             UIApplicationShortcutItem(
                 type: cloudPanoramaType,
@@ -63,6 +89,14 @@ enum AppShortcutManager {
             pendingCloudPanorama = true
             NotificationCenter.default.post(name: cloudPanoramaNotification, object: nil)
             return true
+        case navigateHomeType:
+            pendingSavedPlaceKind = .home
+            NotificationCenter.default.post(name: navigateSavedPlaceNotification, object: nil)
+            return true
+        case navigateWorkType:
+            pendingSavedPlaceKind = .work
+            NotificationCenter.default.post(name: navigateSavedPlaceNotification, object: nil)
+            return true
         default:
             return false
         }
@@ -74,5 +108,10 @@ enum AppShortcutManager {
 
     static func consumePendingCloudPanorama() {
         pendingCloudPanorama = false
+    }
+
+    static func consumePendingSavedPlaceKind() -> SavedPlaceKind? {
+        defer { pendingSavedPlaceKind = nil }
+        return pendingSavedPlaceKind
     }
 }
