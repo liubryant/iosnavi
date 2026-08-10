@@ -67,7 +67,7 @@ final class CloudPanoramaListViewController: UIViewController {
         var backConfig = UIButton.Configuration.filled()
         backConfig.image = UIImage(systemName: "chevron.left")
         backConfig.baseForegroundColor = .white
-        backConfig.baseBackgroundColor = UIColor.black.withAlphaComponent(0.52)
+        backConfig.baseBackgroundColor = UIColor.black.withAlphaComponent(0.16)
         backConfig.cornerStyle = .capsule
         backConfig.contentInsets = .zero
         backButton.configuration = backConfig

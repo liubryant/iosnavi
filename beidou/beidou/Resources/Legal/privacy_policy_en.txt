@@ -8,4 +8,6 @@ Some features rely on third-party SDKs or services, including map, navigation, w
 
 You can manage system permissions such as location, network, and tracking in iOS Settings. If you disable a permission, related features may not work normally, but other available features can still be used.
 
+The optional Personal Driving Voice Pack requests microphone access only when you choose to record a voice. After your separate confirmation, the reference recording, exact transcript, and preset navigation phrases are sent over an encrypted connection to the Audio8 TTS Preview service hosted by Hugging Face and may be processed outside mainland China. Generated audio is stored on your device. You may decline this feature without affecting maps or system-voice navigation, and you may delete the local recording and generated pack at any time. Only use your own voice or a voice for which you have valid authorization.
+
 If you have questions or requests about personal information protection, please contact us through the contact information provided in the app or related service pages.

@@ -72,7 +72,7 @@
 "route.need_destination" = "请先输入终点";
 
 "search.destination_title" = "搜索目的地";
-"search.destination_satellite_title" = "卫星定位导航";
+"search.destination_satellite_title" = "卫星导航地图";
 "search.destination_placeholder" = "输入终点名称/地址";
 "search.no_history" = "暂无历史记录";
 "search.searching_destination" = "正在搜索目的地...";

@@ -22,6 +22,7 @@ final class PangleFeedAdManager: NSObject {
     #if canImport(BUAdSDK)
     private var feedAdManager: BUNativeExpressAdManager?
     private weak var feedContainerView: UIView?
+    private var feedHeightDidChange: ((CGFloat) -> Void)?
     #endif
 
     private weak var rootViewController: UIViewController?
@@ -31,7 +32,7 @@ final class PangleFeedAdManager: NSObject {
     }
 
     /// 加载信息流广告，渲染成功后铺满容器。
-    func loadFeedAd(in container: UIView, rootViewController: UIViewController) {
+    func loadFeedAd(in container: UIView, rootViewController: UIViewController, heightDidChange: ((CGFloat) -> Void)? = nil) {
         #if canImport(BUAdSDK)
         guard SpUtil.bool(.agreementAccepted),
               Constants.isInlineTemplateAdEnabled,
@@ -40,13 +41,14 @@ final class PangleFeedAdManager: NSObject {
         guard PangleAdManager.shared.isSDKInitialized() else {
             PangleAdManager.shared.initialize { [weak self, weak container, weak rootViewController] success in
                 guard success, let container, let rootViewController else { return }
-                self?.loadFeedAd(in: container, rootViewController: rootViewController)
+                self?.loadFeedAd(in: container, rootViewController: rootViewController, heightDidChange: heightDidChange)
             }
             return
         }
 
         DispatchQueue.main.async { [weak self, weak container, weak rootViewController] in
             guard let self, let container, let rootViewController else { return }
+            self.feedHeightDidChange = heightDidChange
             self.loadFeedAdAfterLayout(in: container, rootViewController: rootViewController)
         }
         #endif
@@ -63,7 +65,8 @@ final class PangleFeedAdManager: NSObject {
         container.subviews.forEach { $0.removeFromSuperview() }
         feedContainerView = container
 
-        let adSize = CGSize(width: width, height: 250)
+        // 信息流模板通常高于旧的固定 250pt，按容器宽度申请完整素材区域。
+        let adSize = CGSize(width: width, height: max(300, width * 0.8))
         let imageSize = BUSize()
         imageSize.width = max(Int(adSize.width * UIScreen.main.scale), 1)
         imageSize.height = max(Int(adSize.height * UIScreen.main.scale), 1)
@@ -95,8 +98,8 @@ extension PangleFeedAdManager: BUMNativeExpressAdViewDelegate, BUCustomEventProt
         guard let adView = views.first, let container = feedContainerView else { return }
         container.subviews.forEach { $0.removeFromSuperview() }
         adView.rootViewController = rootViewController
-        adView.frame = container.bounds
-        adView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        adView.frame = CGRect(origin: .zero, size: CGSize(width: container.bounds.width, height: max(container.bounds.height, adView.bounds.height)))
+        adView.autoresizingMask = [.flexibleWidth]
         container.addSubview(adView)
         adView.render()
     }
@@ -106,7 +109,11 @@ extension PangleFeedAdManager: BUMNativeExpressAdViewDelegate, BUCustomEventProt
     }
 
     func nativeExpressAdViewRenderSuccess(_ nativeExpressAdView: BUNativeExpressAdView) {
-        // 渲染成功，已在 nativeExpressAdSuccess 中加入容器
+        guard let container = feedContainerView else { return }
+        let renderedHeight = max(nativeExpressAdView.bounds.height, nativeExpressAdView.frame.height)
+        guard renderedHeight > 0 else { return }
+        feedHeightDidChange?(renderedHeight)
+        nativeExpressAdView.frame = CGRect(x: 0, y: 0, width: container.bounds.width, height: renderedHeight)
     }
 
     func nativeExpressAdViewRenderFail(_ nativeExpressAdView: BUNativeExpressAdView, error: Error?) {

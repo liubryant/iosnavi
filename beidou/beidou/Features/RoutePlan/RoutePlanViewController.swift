@@ -36,6 +36,7 @@ final class RoutePlanViewController: UIViewController {
     private let topWeatherIconView = UIImageView()
     private var modeButtons: [NaviMode: UIButton] = [:]
     private let feedAdContainer = UIView()
+    private var feedAdHeightConstraint: NSLayoutConstraint?
     private let homePlaceButton = UIButton(type: .system)
     private let workPlaceButton = UIButton(type: .system)
 
@@ -150,7 +151,7 @@ final class RoutePlanViewController: UIViewController {
         var configuration = UIButton.Configuration.filled()
         configuration.image = UIImage(systemName: "chevron.left")
         configuration.baseForegroundColor = .white
-        configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.52)
+        configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.16)
         configuration.cornerStyle = .capsule
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
         button.configuration = configuration
@@ -220,19 +221,25 @@ final class RoutePlanViewController: UIViewController {
         separator.backgroundColor = .separator
 
         let swapButton = UIButton(type: .system)
-        swapButton.setImage(UIImage(systemName: "arrow.up.arrow.down.circle.fill"), for: .normal)
-        swapButton.tintColor = .systemBlue
+        var swapConfiguration = UIButton.Configuration.plain()
+        swapConfiguration.image = UIImage(
+            systemName: "arrow.up.arrow.down.circle.fill",
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: 21, weight: .semibold)
+        )
+        swapConfiguration.baseForegroundColor = .systemBlue
+        swapConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4)
+        swapButton.configuration = swapConfiguration
         swapButton.translatesAutoresizingMaskIntoConstraints = false
         swapButton.addTarget(self, action: #selector(tapSwap), for: .touchUpInside)
-        swapButton.widthAnchor.constraint(equalToConstant: 28).isActive = true
-        swapButton.heightAnchor.constraint(equalToConstant: 28).isActive = true
+        swapButton.widthAnchor.constraint(equalToConstant: 34).isActive = true
+        swapButton.heightAnchor.constraint(equalToConstant: 34).isActive = true
 
         let middleRow = UIView()
         separator.translatesAutoresizingMaskIntoConstraints = false
         middleRow.addSubview(separator)
         middleRow.addSubview(swapButton)
         NSLayoutConstraint.activate([
-            middleRow.heightAnchor.constraint(equalToConstant: 26),
+            middleRow.heightAnchor.constraint(equalToConstant: 34),
             separator.heightAnchor.constraint(equalToConstant: 1),
             separator.leadingAnchor.constraint(equalTo: middleRow.leadingAnchor, constant: 32),
             separator.trailingAnchor.constraint(equalTo: swapButton.leadingAnchor, constant: -8),
@@ -380,7 +387,7 @@ final class RoutePlanViewController: UIViewController {
         configuration.baseForegroundColor = .white
         configuration.baseBackgroundColor = isDark
             ? UIColor(white: 1, alpha: 0.16)
-            : UIColor.black.withAlphaComponent(0.52)
+            : UIColor.black.withAlphaComponent(0.16)
         closeButton.configuration = configuration
 
         updateModeButtons()
@@ -401,17 +408,45 @@ final class RoutePlanViewController: UIViewController {
         editConfiguration.cornerStyle = .medium
         editConfiguration.baseForegroundColor = .systemBlue
         editConfiguration.titleLineBreakMode = .byTruncatingTail
-        editConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
+        editConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 6, bottom: 8, trailing: 6)
         editButton.configuration = editConfiguration
-        editButton.heightAnchor.constraint(equalToConstant: 64).isActive = true
+        editButton.heightAnchor.constraint(equalToConstant: 76).isActive = true
         editButton.addTarget(self, action: #selector(tapEditPlaces), for: .touchUpInside)
 
-        let stack = UIStackView(arrangedSubviews: [homePlaceButton, workPlaceButton, editButton])
-        stack.axis = .horizontal
-        stack.distribution = .fillEqually
-        stack.spacing = 10
+        let voicePackButton = UIButton(type: .system)
+        var voiceConfiguration = UIButton.Configuration.tinted()
+        voiceConfiguration.title = "我的语音包"
+        voiceConfiguration.subtitle = "个人声音导航"
+        voiceConfiguration.image = UIImage(systemName: "waveform.circle.fill")
+        voiceConfiguration.imagePlacement = .leading
+        voiceConfiguration.imagePadding = 6
+        voiceConfiguration.cornerStyle = .medium
+        voiceConfiguration.baseForegroundColor = .systemPurple
+        voiceConfiguration.titleAlignment = .leading
+        voiceConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)
+        voicePackButton.configuration = voiceConfiguration
+        voicePackButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 68).isActive = true
+        voicePackButton.addTarget(self, action: #selector(tapVoicePack), for: .touchUpInside)
+
+        let topRow = UIStackView(arrangedSubviews: [homePlaceButton, workPlaceButton, editButton])
+        topRow.axis = .horizontal
+        topRow.alignment = .center
+        topRow.distribution = .fill
+        topRow.spacing = 8
+        homePlaceButton.widthAnchor.constraint(equalTo: workPlaceButton.widthAnchor).isActive = true
+        // 与上方驾车按钮使用相同宽度：(可用宽度 - 3 × 8pt 间距) / 4。
+        editButton.widthAnchor.constraint(equalTo: topRow.widthAnchor, multiplier: 0.25, constant: -6).isActive = true
+
+        let stack = UIStackView(arrangedSubviews: [topRow, voicePackButton])
+        stack.axis = .vertical
+        stack.distribution = .fill
+        stack.spacing = 14
         updateSavedPlaceButtons()
         return stack
+    }
+
+    @objc private func tapVoicePack() {
+        navigationController?.pushViewController(PersonalVoicePackListViewController(), animated: true)
     }
 
     private func configureSavedPlaceButton(_ button: UIButton, icon: String, action: Selector) {
@@ -419,16 +454,23 @@ final class RoutePlanViewController: UIViewController {
         configuration.image = UIImage(systemName: icon)
         configuration.imagePlacement = .leading
         configuration.imagePadding = 6
+        configuration.titlePadding = 8
         configuration.cornerStyle = .medium
         configuration.baseForegroundColor = .systemBlue
         configuration.titleAlignment = .leading
         configuration.titleLineBreakMode = .byTruncatingTail
         configuration.subtitleLineBreakMode = .byTruncatingTail
-        configuration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
+        configuration.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = attributes
+            attributes.font = .systemFont(ofSize: 12, weight: .regular)
+            return attributes
+        }
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 10)
         button.configuration = configuration
+        button.clipsToBounds = true
         button.titleLabel?.numberOfLines = 1
         button.titleLabel?.lineBreakMode = .byTruncatingTail
-        button.heightAnchor.constraint(equalToConstant: 64).isActive = true
+        button.heightAnchor.constraint(greaterThanOrEqualToConstant: 76).isActive = true
         button.addTarget(self, action: action, for: .touchUpInside)
     }
 
@@ -482,19 +524,28 @@ final class RoutePlanViewController: UIViewController {
 
     private func setupFeedAdContainer() {
         feedAdContainer.translatesAutoresizingMaskIntoConstraints = false
-        feedAdContainer.backgroundColor = .secondarySystemGroupedBackground
+        // 请求成功前不显示背景和占位，避免广告失败时留下大块空白区域。
+        feedAdContainer.backgroundColor = .clear
         feedAdContainer.layer.cornerRadius = 12
         feedAdContainer.layer.cornerCurve = .continuous
         feedAdContainer.clipsToBounds = true
         feedAdContainer.isHidden = !Constants.isInlineTemplateAdEnabled
-        feedAdContainer.heightAnchor.constraint(equalToConstant: Constants.isInlineTemplateAdEnabled ? 250 : 0).isActive = true
+        let height = feedAdContainer.heightAnchor.constraint(equalToConstant: 0)
+        height.isActive = true
+        feedAdHeightConstraint = height
     }
 
     private func loadFeedAdIfNeeded() {
         guard Constants.isInlineTemplateAdEnabled, !didLoadFeedAd else { return }
         didLoadFeedAd = true
         guard view.window != nil else { return }
-        PangleFeedAdManager.shared.loadFeedAd(in: feedAdContainer, rootViewController: self)
+        PangleFeedAdManager.shared.loadFeedAd(in: feedAdContainer, rootViewController: self) { [weak self] renderedHeight in
+            guard let self else { return }
+            let completeHeight = max(250, renderedHeight)
+            guard abs((self.feedAdHeightConstraint?.constant ?? 0) - completeHeight) > 0.5 else { return }
+            self.feedAdHeightConstraint?.constant = completeHeight
+            UIView.animate(withDuration: 0.2) { self.view.layoutIfNeeded() }
+        }
     }
 
     // MARK: - 数据

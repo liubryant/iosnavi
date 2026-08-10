@@ -11,7 +11,7 @@
 import Foundation
 import AVFoundation
 
-final class TTSController: NSObject {
+final class TTSController: NSObject, AVAudioPlayerDelegate {
 
     struct VoiceOption: Identifiable {
         let identifier: String
@@ -30,6 +30,8 @@ final class TTSController: NSObject {
     static let shared = TTSController()
 
     private let synthesizer = AVSpeechSynthesizer()
+    private var personalPlayer: AVAudioPlayer?
+    private var personalAudioQueue: [URL] = []
     private var isAudioSessionConfigured = false
     private let selectedVoiceIdentifierKey = "navi.tts.voice.identifier"
 
@@ -39,22 +41,134 @@ final class TTSController: NSObject {
 
     /// 播报一段文字 (按队列顺序播放，对应 Android wordList.addLast)
     func speak(_ text: String) {
+        speak(text, voice: resolvedVoice())
+    }
+
+    private func speak(_ text: String, voice: AVSpeechSynthesisVoice?) {
         guard !text.isEmpty else { return }
         configureAudioSessionIfNeeded()
+        if personalPlayer?.isPlaying == true {
+            personalAudioQueue.removeAll()
+            personalPlayer?.stop()
+            personalPlayer = nil
+        }
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = resolvedVoice()
+        utterance.voice = voice
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
         utterance.pitchMultiplier = 1.0
         synthesizer.speak(utterance)
     }
 
+    /// 驾车导航优先使用已生成的个人语音；未命中时立即回退系统 TTS。
+    func speakDrive(_ text: String) {
+        let store = PersonalVoicePackStore.shared
+        let isExactHit = store.hasExactAudio(for: text)
+        let audioURLs = store.audioURLs(for: text)
+        guard !audioURLs.isEmpty else {
+            // 先立即播报，后台生成不参与本次播放，避免错过转向时机。
+            speak(text, voice: personalVoiceFallback())
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                DynamicPersonalVoiceCache.shared.collectAndGenerate(text)
+            }
+            return
+        }
+        configureAudioSessionIfNeeded()
+        synthesizer.stopSpeaking(at: .immediate)
+        personalAudioQueue.append(contentsOf: audioURLs)
+        playNextPersonalAudioIfNeeded()
+        // 基础片段只能近似覆盖完整文案时，后台继续缓存高德原始整句。
+        if !isExactHit {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                DynamicPersonalVoiceCache.shared.collectAndGenerate(text)
+            }
+        }
+    }
+
+    /// 退出驾车导航时使用完整收尾语，避免只播放“导航结束”显得突然。
+    func speakDriveClosing() {
+        let text = "导航结束，感谢您的使用，请确认车辆已经安全停稳。"
+        if let cachedURL = PersonalVoicePackStore.shared.cachedDynamicAudioURL(for: text) {
+            configureAudioSessionIfNeeded()
+            synthesizer.stopSpeaking(at: .immediate)
+            personalAudioQueue.append(cachedURL)
+            playNextPersonalAudioIfNeeded()
+            return
+        }
+
+        // 第一次立即使用系统声音，完整个人声音在后台生成供下次使用。
+        speak(text, voice: personalVoiceFallback())
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            DynamicPersonalVoiceCache.shared.collectAndGenerate(text)
+        }
+    }
+
+    /// 算路完成后后台预热路线文案；不等待、不影响开始导航。
+    func prewarmDriveVoice(_ texts: [String]) {
+        DispatchQueue.main.async {
+            DynamicPersonalVoiceCache.shared.prewarm(texts)
+        }
+    }
+
+    /// 收集当前播报模式过滤掉的高德文案，不影响本次语音播放。
+    func collectDriveVoiceForCache(_ text: String) {
+        DispatchQueue.main.async {
+            DynamicPersonalVoiceCache.shared.collectForLater(text)
+        }
+    }
+
+    private func personalVoiceFallback() -> AVSpeechSynthesisVoice? {
+        let voices = AVSpeechSynthesisVoice.speechVoices()
+        let gender = PersonalVoicePackStore.shared.activeGender
+        if gender == .male {
+            let aliases = ["彬彬", "binbin", "bin-bin", "bin_bin", "bin bin"]
+            if let binbin = voices.first(where: { voice in
+                let searchable = "\(voice.name) \(voice.identifier)".lowercased()
+                return voice.language.lowercased().hasPrefix("zh") && aliases.contains { searchable.contains($0) }
+            }) { return binbin }
+            return voices.filter { $0.language.lowercased().hasPrefix("zh") && $0.gender == .male }
+                .sorted { $0.quality.rawValue > $1.quality.rawValue }.first
+                ?? AVSpeechSynthesisVoice(language: "zh-CN")
+        }
+
+        let aliases = ["黎潋", "li-lian", "li_lian", "li lian", "lilian", "tingting", "meijia", "mei-jia"]
+        if let preferred = voices.first(where: { voice in
+            let searchable = "\(voice.name) \(voice.identifier)".lowercased()
+            return voice.language.lowercased().hasPrefix("zh") && aliases.contains { searchable.contains($0) }
+        }) { return preferred }
+        return voices.filter { $0.language.lowercased().hasPrefix("zh") && $0.gender == .female }
+            .sorted { $0.quality.rawValue > $1.quality.rawValue }.first
+            ?? AVSpeechSynthesisVoice(language: "zh-CN")
+    }
+
     /// 停止播报并清空队列 (对应 Android stopSpeaking)
     func stop() {
         synthesizer.stopSpeaking(at: .immediate)
+        personalAudioQueue.removeAll()
+        personalPlayer?.stop()
+        personalPlayer = nil
     }
 
     var isSpeaking: Bool {
-        synthesizer.isSpeaking
+        synthesizer.isSpeaking || personalPlayer?.isPlaying == true
+    }
+
+    private func playNextPersonalAudioIfNeeded() {
+        guard personalPlayer?.isPlaying != true, !personalAudioQueue.isEmpty else { return }
+        let url = personalAudioQueue.removeFirst()
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.delegate = self
+            player.prepareToPlay()
+            personalPlayer = player
+            player.play()
+        } catch {
+            personalPlayer = nil
+        }
+    }
+
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        personalPlayer = nil
+        playNextPersonalAudioIfNeeded()
     }
 
     var availableChineseVoices: [VoiceOption] {

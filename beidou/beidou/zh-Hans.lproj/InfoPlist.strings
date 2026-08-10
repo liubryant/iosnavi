@@ -2,4 +2,5 @@
 "CFBundleName" = "卫星导航地图";
 "NSLocationWhenInUseUsageDescription" = "卫星导航地图需要获取您的位置信息，以便为您提供地图定位、路线规划与导航服务。";
 "NSLocationAlwaysAndWhenInUseUsageDescription" = "卫星导航地图需要在导航过程中持续获取您的位置信息，以便为您提供实时路线引导与语音播报。";
+"NSMicrophoneUsageDescription" = "用于录制您本人或已获授权的声音，并生成仅供个人使用的驾车导航语音包。";
 "NSUserTrackingUsageDescription" = "为了向您提供更相关的广告内容并改善广告体验，我们需要您的同意以访问设备的广告标识符。";

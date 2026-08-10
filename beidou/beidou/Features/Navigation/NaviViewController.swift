@@ -80,6 +80,22 @@ private enum NaviBroadcastMode: String, CaseIterable {
     }
 }
 
+private enum DriveNavigationMode {
+    private static var simulationEnabledForCurrentNavigation = false
+
+    static var isSimulationEnabled: Bool {
+        get { simulationEnabledForCurrentNavigation }
+        set { simulationEnabledForCurrentNavigation = newValue }
+    }
+
+    static func resetToGPSNavigation() {
+        simulationEnabledForCurrentNavigation = false
+        UserDefaults.standard.removeObject(forKey: "navi.drive.simulation.enabled")
+        UserDefaults.standard.removeObject(forKey: "navi.drive.simulation.speed")
+    }
+
+}
+
 final class NavigationRuntimeState {
     static let shared = NavigationRuntimeState()
 
@@ -119,6 +135,7 @@ final class NaviViewController: UIViewController {
         self.start = start
         self.end = end
         self.mode = mode
+        DriveNavigationMode.resetToGPSNavigation()
         super.init(nibName: nil, bundle: nil)
         self.modalPresentationStyle = .fullScreen
     }
@@ -294,7 +311,7 @@ final class NaviViewController: UIViewController {
 
         NSLayoutConstraint.activate([
             brandOverlayView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 10),
-            brandOverlayView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -67),
+            brandOverlayView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -65),
             brandOverlayView.heightAnchor.constraint(equalToConstant: 28),
 
             stack.leadingAnchor.constraint(equalTo: brandOverlayView.leadingAnchor, constant: 6),
@@ -436,6 +453,7 @@ final class NaviViewController: UIViewController {
     // MARK: - 退出导航 (对应 Android onNaviCancel -> finish())
 
     @objc private func tapClose() {
+        let shouldPlayDriveEnd = mode == .drive || mode == .truck
         NavigationRuntimeState.shared.clearNavigating()
         #if canImport(AMapNaviKit)
         switch mode {
@@ -453,6 +471,12 @@ final class NaviViewController: UIViewController {
             nav.popViewController(animated: true)
         } else {
             dismiss(animated: true)
+        }
+        if shouldPlayDriveEnd {
+            // 等退出动画基本完成再播放完整收尾语，避免切页时声音被打断。
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                TTSController.shared.speakDriveClosing()
+            }
         }
     }
 
@@ -484,6 +508,12 @@ final class NaviViewController: UIViewController {
         alert.addAction(UIAlertAction(title: "播报声音：\(TTSController.shared.currentVoiceName)", style: .default) { [weak self] _ in
             self?.showNavigationVoiceSettings()
         })
+        if mode == .drive || mode == .truck {
+            let prefix = DriveNavigationMode.isSimulationEnabled ? "✓ " : ""
+            alert.addAction(UIAlertAction(title: "\(prefix)模拟驾车导航（补充语音包）", style: .default) { [weak self] _ in
+                self?.toggleDriveSimulation()
+            })
+        }
         alert.addAction(UIAlertAction(title: L10n.t("navi.exit"), style: .destructive) { [weak self] _ in
             self?.tapClose()
         })
@@ -495,6 +525,40 @@ final class NaviViewController: UIViewController {
             popover.permittedArrowDirections = []
         }
 
+        present(alert, animated: true)
+    }
+
+    private func toggleDriveSimulation() {
+        let willEnable = !DriveNavigationMode.isSimulationEnabled
+        DriveNavigationMode.isSimulationEnabled = willEnable
+
+        #if canImport(AMapNaviKit)
+        let manager = AMapNaviDriveManager.sharedInstance()
+        manager.stopNavi()
+        let started: Bool
+        if willEnable {
+            // 高德 SDK 最大模拟速度，便于快速跑完整条路线并补充语音包。
+            manager.setEmulatorNaviSpeed(120)
+            started = manager.startEmulatorNavi()
+        } else {
+            started = manager.startGPSNavi()
+        }
+        if !started {
+            DriveNavigationMode.isSimulationEnabled.toggle()
+            showMessage(willEnable ? "模拟导航启动失败，请重新规划路线后再试。" : "GPS 导航启动失败，请重新规划路线后再试。")
+            return
+        }
+        #endif
+
+        let message = willEnable
+            ? "已开启模拟驾车导航。路线播报会自动补充当前个人语音包，真实导航不会等待生成。"
+            : "已关闭模拟驾车导航，已切换为 GPS 实时导航。"
+        showMessage(message)
+    }
+
+    private func showMessage(_ message: String) {
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "知道了", style: .default))
         present(alert, animated: true)
     }
 
@@ -557,7 +621,7 @@ final class NaviViewController: UIViewController {
         present(alert, animated: true)
     }
 
-    fileprivate func speakNaviText(_ text: String) {
+    fileprivate func speakNaviText(_ text: String, usesPersonalVoice: Bool = false) {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else { return }
         // The navigation SDK may send service/quota errors through the same
@@ -569,13 +633,19 @@ final class NaviViewController: UIViewController {
         case .muted:
             TTSController.shared.stop()
         case .detailed:
-            TTSController.shared.speak(trimmedText)
+            usesPersonalVoice ? TTSController.shared.speakDrive(trimmedText) : TTSController.shared.speak(trimmedText)
         case .standard:
-            guard !isLowPriorityBroadcast(trimmedText) else { return }
-            TTSController.shared.speak(trimmedText)
+            guard !isLowPriorityBroadcast(trimmedText) else {
+                if usesPersonalVoice { TTSController.shared.collectDriveVoiceForCache(trimmedText) }
+                return
+            }
+            usesPersonalVoice ? TTSController.shared.speakDrive(trimmedText) : TTSController.shared.speak(trimmedText)
         case .concise:
-            guard isKeyBroadcast(trimmedText) else { return }
-            TTSController.shared.speak(trimmedText)
+            guard isKeyBroadcast(trimmedText) else {
+                if usesPersonalVoice { TTSController.shared.collectDriveVoiceForCache(trimmedText) }
+                return
+            }
+            usesPersonalVoice ? TTSController.shared.speakDrive(trimmedText) : TTSController.shared.speak(trimmedText)
         }
     }
 
@@ -606,10 +676,21 @@ final class NaviViewController: UIViewController {
 extension NaviViewController: AMapNaviDriveManagerDelegate {
 
     func driveManager(onCalculateRouteSuccess driveManager: AMapNaviDriveManager) {
+        // 立即复制为纯 Swift 字符串数组，不把高德 SDK 的桥接集合带入异步任务。
+        let routeTexts: [String] = driveManager.naviRoute?.guideGroups.flatMap { group in
+            group.guideSegments.compactMap { $0.detailedDescription }
+        } ?? []
         // 对应 Android mAMapNavi.startNavi(NaviType.GPS)
         hasStartedNavigation = true
         NavigationRuntimeState.shared.markNavigating()
-        driveManager.startGPSNavi()
+        if DriveNavigationMode.isSimulationEnabled {
+            driveManager.setEmulatorNaviSpeed(120)
+            driveManager.startEmulatorNavi()
+        } else {
+            driveManager.startGPSNavi()
+        }
+        // 导航先启动，路线语音缓存随后异步预热，避免增加进入导航的等待时间。
+        TTSController.shared.prewarmDriveVoice(routeTexts)
     }
 
     func driveManager(_ driveManager: AMapNaviDriveManager, onCalculateRouteFailure error: Error) {
@@ -620,12 +701,16 @@ extension NaviViewController: AMapNaviDriveManagerDelegate {
 
     /// 语音播报文本回调 (对应 Android TTSController.onGetNavigationText)
     func driveManager(_ driveManager: AMapNaviDriveManager, playNaviSound soundString: String, soundStringType: AMapNaviSoundType) {
-        speakNaviText(soundString)
+        speakNaviText(soundString, usesPersonalVoice: true)
+    }
+
+    func driveManagerIsNaviSoundPlaying(_ driveManager: AMapNaviDriveManager) -> Bool {
+        TTSController.shared.isSpeaking
     }
 
     func driveManager(onArrivedDestination driveManager: AMapNaviDriveManager) {
         NavigationRuntimeState.shared.clearNavigating()
-        speakNaviText(L10n.t("navi.arrived"))
+        speakNaviText(L10n.t("navi.arrived"), usesPersonalVoice: true)
     }
 }
 

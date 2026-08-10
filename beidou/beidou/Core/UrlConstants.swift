@@ -9,6 +9,9 @@
 import Foundation
 
 enum UrlConstants {
+    /// Audio8 公开预览服务。仅用于创建个人驾车语音包；导航过程中不访问该接口。
+    static let audio8Generate = "https://audio8-audio8-tts-preview-0-6b.hf.space/api/generate"
+
     /// 广告权限/版本信息查询接口 (注意: http 非 https，已在 Info.plist 中配置 ATS 例外)
     static let permissionInfo = "http://cjym123.cn/api/info"
 

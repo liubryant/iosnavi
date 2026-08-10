@@ -30,11 +30,13 @@ final class CloudPanoramaNotificationManager: NSObject {
 
     func configure() {
         center.delegate = self
+        // 清理旧版本可能因滑动清除通知而错误留下的跳转状态。
+        UserDefaults.standard.removeObject(forKey: Self.pendingScenicIDKey)
         let category = UNNotificationCategory(
             identifier: Self.notificationCategoryID,
             actions: [],
             intentIdentifiers: [],
-            options: [.customDismissAction]
+            options: []
         )
         center.setNotificationCategories([category])
     }
@@ -143,6 +145,10 @@ final class CloudPanoramaNotificationManager: NSObject {
     }
 
     private func handleNotificationResponse(_ response: UNNotificationResponse) {
+        // 只有明确点击通知主体才允许跳转。滑动清除、关闭或其他动作均忽略。
+        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier else {
+            return
+        }
         guard let scenicID = response.notification.request.content.userInfo["scenic_id"] as? String,
               !scenicID.isEmpty else {
             return

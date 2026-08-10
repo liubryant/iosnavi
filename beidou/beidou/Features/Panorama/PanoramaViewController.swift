@@ -80,7 +80,7 @@ final class PanoramaViewController: UIViewController {
         var configuration = UIButton.Configuration.filled()
         configuration.image = UIImage(systemName: "chevron.left")
         configuration.baseForegroundColor = .white
-        configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.52)
+        configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.16)
         configuration.cornerStyle = .capsule
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
         backButton.configuration = configuration

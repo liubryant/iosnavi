@@ -203,7 +203,7 @@ final class EarthquakeViewController: UIViewController {
         var configuration = UIButton.Configuration.filled()
         configuration.image = UIImage(systemName: "chevron.left")
         configuration.baseForegroundColor = .white
-        configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.52)
+        configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.16)
         configuration.cornerStyle = .capsule
         configuration.contentInsets = .zero
         backButton.configuration = configuration

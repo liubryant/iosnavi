@@ -114,7 +114,7 @@ final class MapViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        refreshLocationOnColdStartIfNeeded()
+        refreshLocationWhenPageAppears()
         scheduleCloudPanoramaWelcomeIfNeeded()
         ReviewPromptManager.requestSystemReviewIfEligibleAfterCloudScenes(in: self)
     }
@@ -138,7 +138,9 @@ final class MapViewController: UIViewController {
     }
 
     private func scheduleCloudPanoramaWelcomeIfNeeded(after delay: TimeInterval = 5) {
-        guard !Self.didShowCloudPanoramaWelcomeThisLaunch, cloudWelcomeWorkItem == nil else { return }
+        guard !Self.didShowCloudPanoramaWelcomeThisLaunch,
+              cloudWelcomeWorkItem == nil,
+              canShowCloudPanoramaWelcomeToday() else { return }
         let workItem = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.cloudWelcomeWorkItem = nil
@@ -156,10 +158,12 @@ final class MapViewController: UIViewController {
 
     private func showCloudPanoramaWelcome() {
         guard !Self.didShowCloudPanoramaWelcomeThisLaunch,
+              canShowCloudPanoramaWelcomeToday(),
               let item = randomCloudPanoramaWelcomeItem() else {
             return
         }
         Self.didShowCloudPanoramaWelcomeThisLaunch = true
+        recordCloudPanoramaWelcomeShown()
         SpUtil.setString(item.id, for: .lastCloudPanoramaWelcomeID)
         let popup = CloudPanoramaWelcomeViewController(item: item)
         popup.onOpenFeatured = { [weak self] in
@@ -172,6 +176,23 @@ final class MapViewController: UIViewController {
             self?.navigationController?.pushViewController(CloudPanoramaListViewController(), animated: true)
         }
         present(popup, animated: true)
+    }
+
+    private func canShowCloudPanoramaWelcomeToday(now: Date = Date()) -> Bool {
+        let timestamp = SpUtil.double(.cloudPanoramaWelcomeLastShownAt)
+        guard timestamp > 0 else { return true }
+        let lastShownAt = Date(timeIntervalSince1970: timestamp)
+        guard Calendar.current.isDate(lastShownAt, inSameDayAs: now) else { return true }
+        return SpUtil.integer(.cloudPanoramaWelcomeDailyCount) < 3
+    }
+
+    private func recordCloudPanoramaWelcomeShown(now: Date = Date()) {
+        let timestamp = SpUtil.double(.cloudPanoramaWelcomeLastShownAt)
+        let lastShownAt = timestamp > 0 ? Date(timeIntervalSince1970: timestamp) : nil
+        let isSameDay = lastShownAt.map { Calendar.current.isDate($0, inSameDayAs: now) } ?? false
+        let count = isSameDay ? SpUtil.integer(.cloudPanoramaWelcomeDailyCount) : 0
+        SpUtil.setInteger(count + 1, for: .cloudPanoramaWelcomeDailyCount)
+        SpUtil.setDouble(now.timeIntervalSince1970, for: .cloudPanoramaWelcomeLastShownAt)
     }
 
     private func randomCloudPanoramaWelcomeItem() -> CloudScenicItem? {
@@ -846,11 +867,11 @@ final class MapViewController: UIViewController {
         #endif
     }
 
-    private func refreshLocation(shouldCenterMap: Bool) {
+    private func refreshLocation(shouldCenterMap: Bool, forceCenter: Bool = false, useCachedLocation: Bool = true) {
         LocationManager.shared.requestAuthorization()
 
-        if let cached = LocationManager.shared.lastKnownLocation {
-            updateCurrentLocation(cached, shouldCenterMap: shouldCenterMap)
+        if useCachedLocation, let cached = LocationManager.shared.lastKnownLocation {
+            updateCurrentLocation(cached, shouldCenterMap: shouldCenterMap, forceCenter: forceCenter)
         }
 
         LocationManager.shared.requestLocation { [weak self] location in
@@ -858,14 +879,18 @@ final class MapViewController: UIViewController {
             self.updateCurrentLocation(
                 location,
                 shouldCenterMap: shouldCenterMap,
-                forceCenter: shouldCenterMap && !self.userDidMoveMap
+                forceCenter: forceCenter || (shouldCenterMap && !self.userDidMoveMap)
             )
         }
     }
 
-    private func refreshLocationOnColdStartIfNeeded() {
-        guard currentLocation == nil || !hasCenteredInitialLocation else { return }
-        refreshLocation(shouldCenterMap: true)
+    private func refreshLocationWhenPageAppears() {
+        if currentLocation == nil || !hasCenteredInitialLocation {
+            refreshLocation(shouldCenterMap: true)
+        } else {
+            // 从导航等二级页面返回时重新获取当前位置，更新首页定位标记。
+            refreshLocation(shouldCenterMap: false, useCachedLocation: false)
+        }
     }
 
     private func updateCurrentLocation(_ location: CurrentLocation, shouldCenterMap: Bool, forceCenter: Bool = false) {
@@ -1215,17 +1240,14 @@ final class MapViewController: UIViewController {
         #if canImport(BaiduMapAPI_Map)
         mapView.rotation = 0
         #endif
+        // 先给用户即时反馈，再强制请求一次新位置；不能只使用旧的内存缓存。
         if let currentLocation {
             centerMap(on: currentLocation)
-            return
+        } else if let cached = LocationManager.shared.lastKnownLocation {
+            updateCurrentLocation(cached, shouldCenterMap: true, forceCenter: true)
         }
-        if let cached = LocationManager.shared.lastKnownLocation {
-            currentLocation = cached
-            sideMenuVC.updateCurrentLocation(displayLocation(for: cached))
-            centerMap(on: cached)
-            return
-        }
-        refreshLocation(shouldCenterMap: true)
+        userDidMoveMap = false
+        refreshLocation(shouldCenterMap: true, forceCenter: true, useCachedLocation: false)
     }
 }
 

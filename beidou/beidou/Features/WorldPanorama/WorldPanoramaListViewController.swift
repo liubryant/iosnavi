@@ -51,7 +51,7 @@ final class WorldPanoramaListViewController: UIViewController {
         var backButtonConfiguration = UIButton.Configuration.filled()
         backButtonConfiguration.image = UIImage(systemName: "chevron.left")
         backButtonConfiguration.baseForegroundColor = .white
-        backButtonConfiguration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.52)
+        backButtonConfiguration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.16)
         backButtonConfiguration.cornerStyle = .capsule
         backButtonConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
         backButton.configuration = backButtonConfiguration
@@ -497,7 +497,7 @@ private final class LegacyCloudPanoramaListViewController: UIViewController {
         var configuration = UIButton.Configuration.filled()
         configuration.image = UIImage(systemName: "chevron.left")
         configuration.baseForegroundColor = .white
-        configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.52)
+        configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.16)
         configuration.cornerStyle = .capsule
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
         backButton.configuration = configuration
@@ -760,7 +760,7 @@ final class CloudPanoramaWebViewController: UIViewController {
         var configuration = UIButton.Configuration.filled()
         configuration.image = UIImage(systemName: "chevron.left")
         configuration.baseForegroundColor = .white
-        configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.52)
+        configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.16)
         configuration.cornerStyle = .capsule
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
         backButton.configuration = configuration

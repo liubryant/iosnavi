@@ -37,6 +37,8 @@ final class LocationManager: NSObject {
 
     private let clManager = CLLocationManager()
     private var pendingLocationCompletions: [(CurrentLocation?) -> Void] = []
+    private var authorizedLocationCompletions: [(CurrentLocation?) -> Void] = []
+    private var isLocationRequestInFlight = false
 
     private override init() {
         super.init()
@@ -85,10 +87,15 @@ final class LocationManager: NSObject {
     }
 
     private func requestAuthorizedLocation(completion: @escaping (CurrentLocation?) -> Void) {
+        authorizedLocationCompletions.append(completion)
+        guard !isLocationRequestInFlight else { return }
+        isLocationRequestInFlight = true
+
         #if canImport(AMapLocationKit)
-        manager.requestLocation(withReGeocode: true) { location, reGeocode, error in
+        let accepted = manager.requestLocation(withReGeocode: true) { [weak self] location, reGeocode, error in
+            guard let self else { return }
             guard let location, error == nil else {
-                DispatchQueue.main.async { completion(nil) }
+                self.finishAuthorizedLocationRequest(with: nil)
                 return
             }
             let city = reGeocode?.city?.isEmpty == false ? (reGeocode?.city ?? Constants.city) : Constants.city
@@ -104,11 +111,23 @@ final class LocationManager: NSObject {
                 address: address
             )
             Self.cache(result)
-            DispatchQueue.main.async { completion(result) }
+            self.finishAuthorizedLocationRequest(with: result)
+        }
+        if !accepted {
+            finishAuthorizedLocationRequest(with: nil)
         }
         #else
-        DispatchQueue.main.async { completion(nil) }
+        finishAuthorizedLocationRequest(with: nil)
         #endif
+    }
+
+    private func finishAuthorizedLocationRequest(with location: CurrentLocation?) {
+        DispatchQueue.main.async {
+            self.isLocationRequestInFlight = false
+            let completions = self.authorizedLocationCompletions
+            self.authorizedLocationCompletions.removeAll()
+            completions.forEach { $0(location) }
+        }
     }
 
     private func flushPendingLocationRequestsIfNeeded(status: CLAuthorizationStatus) {

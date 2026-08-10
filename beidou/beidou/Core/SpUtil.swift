@@ -35,6 +35,10 @@ enum SpUtil {
         case cloudPanoramaWelcomeShown = "cloud_panorama_welcome_shown"
         /// 上次首页 720 云景推荐弹窗展示的景区标识，用于下次冷启动尽量换一项
         case lastCloudPanoramaWelcomeID = "last_cloud_panorama_welcome_id"
+        /// 首页 720 云景推荐最近一次展示时间，用于按自然日限制次数
+        case cloudPanoramaWelcomeLastShownAt = "cloud_panorama_welcome_last_shown_at"
+        /// 首页 720 云景推荐当天累计展示次数
+        case cloudPanoramaWelcomeDailyCount = "cloud_panorama_welcome_daily_count"
         /// 已浏览过的720云景区场景标识(场景URL)列表，用于判断是否达到评分提示阈值
         case viewedCloudPanoramaSceneIDs = "viewed_cloud_panorama_scene_ids"
         /// 浏览满2个720云景区后，是否已触发过系统评分提示(只触发一次，避免频繁请求)
