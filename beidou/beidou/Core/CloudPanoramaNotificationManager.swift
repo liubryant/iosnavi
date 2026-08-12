@@ -17,7 +17,7 @@ final class CloudPanoramaNotificationManager: NSObject {
     private static let notificationCategoryID = "cloud.panorama.recommendation"
     private static let notificationIDPrefix = "cloud.panorama.daily."
     private static let testNotificationID = "cloud.panorama.test.30s"
-    private static let isLaunchTestNotificationEnabled = false
+    private static let isLaunchTestNotificationEnabled = true
 
     private let center = UNUserNotificationCenter.current()
     private let scheduleHours = [10, 12, 16, 20]
@@ -97,7 +97,7 @@ final class CloudPanoramaNotificationManager: NSObject {
         addNotification(
             identifier: Self.testNotificationID,
             item: item,
-            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 30, repeats: false)
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
         )
     }
 
@@ -113,7 +113,13 @@ final class CloudPanoramaNotificationManager: NSObject {
             content.attachments = [attachment]
         }
 
-        center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: trigger))
+        center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)) { error in
+            #if DEBUG
+            if let error {
+                print("⚠️ 720景区通知添加失败 [\(item.title)]：\(error.localizedDescription)")
+            }
+            #endif
+        }
     }
 
     private func notificationBody(for item: CloudScenicItem) -> String {
@@ -126,22 +132,60 @@ final class CloudPanoramaNotificationManager: NSObject {
 
     private func notificationAttachment(for item: CloudScenicItem) -> UNNotificationAttachment? {
         guard let sourceURL = item.coverImageURL else { return nil }
-        let ext = sourceURL.pathExtension.isEmpty ? "jpg" : sourceURL.pathExtension
-        let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
-        let destination = directory
-            .appendingPathComponent("cloud-panorama-notification-\(item.id.hashValue)")
-            .appendingPathExtension(ext)
+        let fileManager = FileManager.default
+        let root = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fileManager.temporaryDirectory
+        let directory = root.appendingPathComponent("CloudPanoramaNotificationCovers", isDirectory: true)
+        let stableName = item.cover
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "\\", with: "_")
+        let destination = directory.appendingPathComponent(stableName).deletingPathExtension()
+            .appendingPathExtension("jpg")
 
         do {
-            if FileManager.default.fileExists(atPath: destination.path) {
-                try FileManager.default.removeItem(at: destination)
+            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+            if !fileManager.fileExists(atPath: destination.path) {
+                try writeSquareNotificationCover(from: sourceURL, to: destination)
             }
-            try FileManager.default.copyItem(at: sourceURL, to: destination)
-            return try UNNotificationAttachment(identifier: "cover", url: destination)
+            return try UNNotificationAttachment(
+                identifier: "scenic-cover-\(item.id)",
+                url: destination,
+                options: [UNNotificationAttachmentOptionsTypeHintKey: "public.jpeg"]
+            )
         } catch {
+            #if DEBUG
+            print("⚠️ 720景区通知封面创建失败 [\(item.title)]：\(error.localizedDescription)")
+            #endif
             return nil
         }
+    }
+
+    /// 折叠通知的附件位置由 iOS 决定。统一生成方形封面，可以让右侧缩略图
+    /// 与左侧标题和正文形成规整的同高内容块，避免横图被系统随意截断。
+    private func writeSquareNotificationCover(from sourceURL: URL, to destination: URL) throws {
+        guard let image = UIImage(contentsOfFile: sourceURL.path), let cgImage = image.cgImage else {
+            throw NSError(domain: "CloudPanoramaNotification", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "无法读取景区封面"])
+        }
+        let width = CGFloat(cgImage.width)
+        let height = CGFloat(cgImage.height)
+        let side = min(width, height)
+        let cropRect = CGRect(x: (width - side) / 2, y: (height - side) / 2,
+                              width: side, height: side).integral
+        guard let cropped = cgImage.cropping(to: cropRect) else {
+            throw NSError(domain: "CloudPanoramaNotification", code: 2,
+                          userInfo: [NSLocalizedDescriptionKey: "景区封面裁剪失败"])
+        }
+
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 240, height: 240))
+        let thumbnail = renderer.image { _ in
+            UIImage(cgImage: cropped).draw(in: CGRect(x: 0, y: 0, width: 240, height: 240))
+        }
+        guard let data = thumbnail.jpegData(compressionQuality: 0.82) else {
+            throw NSError(domain: "CloudPanoramaNotification", code: 3,
+                          userInfo: [NSLocalizedDescriptionKey: "景区封面压缩失败"])
+        }
+        try data.write(to: destination, options: .atomic)
     }
 
     private func handleNotificationResponse(_ response: UNNotificationResponse) {

@@ -101,7 +101,6 @@
 				B9E50F4B68E18261B8CBC312 /* NaviWidgets.swift */,
 				F7C29C967C2C33A6D9EE7099 /* Info.plist */,
 			);
-			name = NaviWidgets;
 			path = NaviWidgets;
 			sourceTree = "<group>";
 		};

@@ -243,7 +243,13 @@ final class PersonalVoicePackStore {
     }
 
     func activeGenerationContext() -> (packID: String, referenceText: String, referenceAudioURL: URL)? {
-        guard let pack = activePack, pack.allowsDynamicGeneration == true else { return nil }
+        guard let pack = activePack else { return nil }
+        return generationContext(for: pack.id)
+    }
+
+    func generationContext(for packID: String) -> (packID: String, referenceText: String, referenceAudioURL: URL)? {
+        guard let pack = packs().first(where: { $0.id == packID }),
+              pack.allowsDynamicGeneration == true else { return nil }
         let directory = directory(for: pack.id)
         let audioURL = directory.appendingPathComponent("reference.wav")
         let textURL = directory.appendingPathComponent("reference.txt")
@@ -252,6 +258,32 @@ final class PersonalVoicePackStore {
               let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
               !text.isEmpty else { return nil }
         return (pack.id, text, audioURL)
+    }
+
+    /// 汇总其他语音包已经成功生成的动态文案。新音色只复用文案，不复用
+    /// 旧音频，后续会使用新语音包自己的参考录音重新合成。
+    func generatedDynamicEntriesFromOtherPacks(excluding packID: String) -> [DynamicPersonalVoiceEntry] {
+        var merged: [String: DynamicPersonalVoiceEntry] = [:]
+        for pack in packs() where pack.id != packID {
+            for entry in dynamicEntries(for: pack.id, generatedOnly: true) {
+                let key = Self.normalize(entry.text)
+                guard !key.isEmpty else { continue }
+                if var existing = merged[key] {
+                    existing.hitCount += entry.hitCount
+                    if entry.lastUsedAt > existing.lastUsedAt {
+                        existing.lastUsedAt = entry.lastUsedAt
+                        existing.text = entry.text
+                    }
+                    merged[key] = existing
+                } else {
+                    merged[key] = entry
+                }
+            }
+        }
+        return merged.values.sorted {
+            if $0.hitCount != $1.hitCount { return $0.hitCount > $1.hitCount }
+            return $0.lastUsedAt > $1.lastUsedAt
+        }
     }
 
     @discardableResult
@@ -589,18 +621,50 @@ final class DynamicPersonalVoiceCache {
         }
     }
 
+    /// 新语音包完成基础词条后，在后台串行补齐其他语音包已有的动态文案。
+    /// 不限制为导航预热队列的20条上限；真实导航的高优先级文案仍会插队。
+    func backfillExistingDynamicVoices(into packID: String) {
+        guard let context = store.generationContext(for: packID) else { return }
+        let entries = store.generatedDynamicEntriesFromOtherPacks(excluding: packID)
+        for entry in entries {
+            enqueue(
+                entry.text,
+                context: context,
+                highPriority: false,
+                maximumPendingCount: nil
+            )
+        }
+    }
+
     private func enqueue(_ text: String, highPriority: Bool) {
         let cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard (2...180).contains(cleanText.count),
               let context = store.activeGenerationContext(),
               store.cachedDynamicAudioURL(for: cleanText, packID: context.packID) == nil else { return }
 
+        enqueue(
+            cleanText,
+            context: context,
+            highPriority: highPriority,
+            maximumPendingCount: highPriority ? 30 : 20
+        )
+    }
+
+    private func enqueue(
+        _ text: String,
+        context: (packID: String, referenceText: String, referenceAudioURL: URL),
+        highPriority: Bool,
+        maximumPendingCount: Int?
+    ) {
+        let cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (2...180).contains(cleanText.count),
+              store.cachedDynamicAudioURL(for: cleanText, packID: context.packID) == nil else { return }
+
         let key = "\(context.packID)|\(cleanText)"
         _ = store.recordDynamicRequest(cleanText, packID: context.packID)
         guard !queuedKeys.contains(key), !attemptedKeys.contains(key) else { return }
         // 队列满时不做“已入队”标记，后续再次遇到该文案仍可补充。
-        let maximumPendingCount = highPriority ? 30 : 20
-        guard pending.count < maximumPendingCount else { return }
+        if let maximumPendingCount, pending.count >= maximumPendingCount { return }
         let item = WorkItem(
             text: cleanText,
             packID: context.packID,
@@ -692,6 +756,13 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
         setupTopBar()
         setupUI()
         refreshStatus()
+        resumeDynamicBackfillIfNeeded()
+    }
+
+    private func resumeDynamicBackfillIfNeeded() {
+        guard store.generatedCount() == PersonalVoicePhrase.driveCatalog.count,
+              let packID = store.selectedPackID else { return }
+        DynamicPersonalVoiceCache.shared.backfillExistingDynamicVoices(into: packID)
     }
 
     private func setupTopBar() {
@@ -1064,6 +1135,9 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
             enableSwitch.isOn = true
             generateButton.configuration = filledConfiguration(title: "语音包已完成", image: "checkmark.circle.fill")
             refreshStatus()
+            if let packID = store.selectedPackID {
+                DynamicPersonalVoiceCache.shared.backfillExistingDynamicVoices(into: packID)
+            }
             showMessage("我的语音包生成完成。")
             return
         }

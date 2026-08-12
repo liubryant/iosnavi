@@ -675,7 +675,14 @@ final class MapViewController: UIViewController {
     }
 
     private var bottomSheetExpandedHeight: CGFloat {
-        min(430 + view.safeAreaInsets.bottom, view.bounds.height * 0.68)
+        let historyCount = min(POIHistoryStore.load().count, 3)
+        // 274pt 包含顶部搜索、历史标题、区块间距和两行快捷菜单。
+        // 有记录时每条52pt；没有记录时只保留44pt的空状态提示。
+        let historyContentHeight: CGFloat = historyCount == 0
+            ? 44
+            : CGFloat(historyCount) * 52
+        let contentHeight = 274 + historyContentHeight + view.safeAreaInsets.bottom
+        return min(contentHeight, view.bounds.height * 0.68)
     }
 
     private func makeBottomSheetShortcut(icon: String, title: String, colors: [UIColor], action: Selector) -> UIControl {
