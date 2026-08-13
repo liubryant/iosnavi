@@ -17,7 +17,6 @@ final class CloudPanoramaNotificationManager: NSObject {
     private static let notificationCategoryID = "cloud.panorama.recommendation"
     private static let notificationIDPrefix = "cloud.panorama.daily."
     private static let testNotificationID = "cloud.panorama.test.30s"
-    private static let isLaunchTestNotificationEnabled = true
 
     private let center = UNUserNotificationCenter.current()
     private let scheduleHours = [10, 12, 16, 20]
@@ -47,7 +46,7 @@ final class CloudPanoramaNotificationManager: NSObject {
             guard granted else { return }
             DispatchQueue.main.async {
                 self?.scheduleDailyRecommendations()
-                self?.scheduleLaunchTestRecommendation()
+                self?.center.removePendingNotificationRequests(withIdentifiers: [Self.testNotificationID])
             }
         }
     }
@@ -88,17 +87,6 @@ final class CloudPanoramaNotificationManager: NSObject {
                 ))
             }
         }
-    }
-
-    private func scheduleLaunchTestRecommendation() {
-        center.removePendingNotificationRequests(withIdentifiers: [Self.testNotificationID])
-        guard Self.isLaunchTestNotificationEnabled else { return }
-        guard let item = CloudScenicItem.all.randomElement() else { return }
-        addNotification(
-            identifier: Self.testNotificationID,
-            item: item,
-            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
-        )
     }
 
     private func addNotification(identifier: String, item: CloudScenicItem, trigger: UNNotificationTrigger) {

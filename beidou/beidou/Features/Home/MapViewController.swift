@@ -67,6 +67,8 @@ final class MapViewController: UIViewController {
     private let defaultZoomLevel: Float = 18
     private let headingManager = CLLocationManager()
     private var currentHeading: CLLocationDirection = 0
+    private var isMapRenderingActive = false
+    private var mapResumeWorkItem: DispatchWorkItem?
 
     #if canImport(BaiduMapAPI_Map)
     private var currentLocationAnnotation: BMKPointAnnotation?
@@ -95,6 +97,7 @@ final class MapViewController: UIViewController {
         setupBottomLabel()
         setupBottomSearchSheet()
         setupHeadingUpdates()
+        observeApplicationLifecycle()
 
         applyMapType(.satellite)
         refreshLocation(shouldCenterMap: true)
@@ -102,11 +105,7 @@ final class MapViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        #if canImport(BaiduMapAPI_Map)
-        mapView.delegate = self
-        mapView.viewWillAppear()
-        #endif
-        startHeadingUpdates()
+        startMapRenderingIfNeeded()
         UMengAnalytics.shared.pageBegin("MapViewController")
         reloadBottomSheetHistory()
         applyCachedBottomSheetWeather()
@@ -129,12 +128,72 @@ final class MapViewController: UIViewController {
         super.viewWillDisappear(animated)
         cloudWelcomeWorkItem?.cancel()
         cloudWelcomeWorkItem = nil
+        stopMapRenderingIfNeeded()
+        UMengAnalytics.shared.pageEnd("MapViewController")
+    }
+
+    deinit {
+        mapResumeWorkItem?.cancel()
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    private func observeApplicationLifecycle() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(applicationDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(applicationDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+    }
+
+    @objc private func applicationDidEnterBackground() {
+        // 系统文件选择器也可能让应用短暂进入后台。百度地图若继续提交
+        // Metal 渲染任务，会触发 BackgroundExecutionNotPermitted，甚至崩溃。
+        mapResumeWorkItem?.cancel()
+        mapResumeWorkItem = nil
+        stopMapRenderingIfNeeded()
+    }
+
+    @objc private func applicationDidBecomeActive() {
+        mapResumeWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.viewIfLoaded?.window != nil,
+                  UIApplication.shared.applicationState == .active else { return }
+            self.startMapRenderingIfNeeded()
+            self.mapView.setNeedsLayout()
+            self.mapView.layoutIfNeeded()
+        }
+        mapResumeWorkItem = workItem
+        // 等系统文件选择器/前后台转场彻底结束后再恢复 Metal 地图，避免白屏。
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: workItem)
+    }
+
+    private func startMapRenderingIfNeeded() {
+        guard !isMapRenderingActive,
+              UIApplication.shared.applicationState != .background else { return }
+        #if canImport(BaiduMapAPI_Map)
+        mapView.delegate = self
+        mapView.viewWillAppear()
+        #endif
+        isMapRenderingActive = true
+        startHeadingUpdates()
+    }
+
+    private func stopMapRenderingIfNeeded() {
+        guard isMapRenderingActive else { return }
         #if canImport(BaiduMapAPI_Map)
         mapView.viewWillDisappear()
         mapView.delegate = nil
         #endif
+        isMapRenderingActive = false
         headingManager.stopUpdatingHeading()
-        UMengAnalytics.shared.pageEnd("MapViewController")
     }
 
     private func scheduleCloudPanoramaWelcomeIfNeeded(after delay: TimeInterval = 5) {

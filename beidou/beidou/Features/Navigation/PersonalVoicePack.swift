@@ -1,6 +1,7 @@
 import UIKit
 import AVFoundation
 import CryptoKit
+import UniformTypeIdentifiers
 
 struct PersonalVoicePhrase: Codable, Hashable {
     let id: String
@@ -152,7 +153,41 @@ final class PersonalVoicePackStore {
         return packsRoot.appendingPathComponent(id, isDirectory: true)
     }
 
-    var referenceAudioURL: URL { packDirectory.appendingPathComponent("reference.wav") }
+    var referenceAudioURL: URL {
+        existingReferenceAudioURL(in: packDirectory) ?? recordingReferenceAudioURL
+    }
+
+    var recordingReferenceAudioURL: URL {
+        packDirectory.appendingPathComponent("reference.wav")
+    }
+
+    private func existingReferenceAudioURL(in directory: URL) -> URL? {
+        for ext in ["mp3", "wav", "m4a"] {
+            let url = directory.appendingPathComponent("reference.\(ext)")
+            if FileManager.default.fileExists(atPath: url.path) { return url }
+        }
+        return nil
+    }
+
+    func replaceReferenceAudio(with sourceURL: URL) throws -> URL {
+        try ensureDirectory()
+        let ext = sourceURL.pathExtension.lowercased()
+        guard ["mp3", "wav", "m4a"].contains(ext) else {
+            throw CocoaError(.fileReadUnsupportedScheme)
+        }
+        let destination = packDirectory.appendingPathComponent("reference.\(ext)")
+        for oldExt in ["mp3", "wav", "m4a"] {
+            let oldURL = packDirectory.appendingPathComponent("reference.\(oldExt)")
+            if oldURL != destination, FileManager.default.fileExists(atPath: oldURL.path) {
+                try FileManager.default.removeItem(at: oldURL)
+            }
+        }
+        if FileManager.default.fileExists(atPath: destination.path) {
+            try FileManager.default.removeItem(at: destination)
+        }
+        try FileManager.default.copyItem(at: sourceURL, to: destination)
+        return destination
+    }
 
     private var referenceTextURL: URL { packDirectory.appendingPathComponent("reference.txt") }
 
@@ -251,7 +286,7 @@ final class PersonalVoicePackStore {
         guard let pack = packs().first(where: { $0.id == packID }),
               pack.allowsDynamicGeneration == true else { return nil }
         let directory = directory(for: pack.id)
-        let audioURL = directory.appendingPathComponent("reference.wav")
+        guard let audioURL = existingReferenceAudioURL(in: directory) else { return nil }
         let textURL = directory.appendingPathComponent("reference.txt")
         guard isValidAudio(at: audioURL),
               let data = try? Data(contentsOf: textURL),
@@ -524,7 +559,13 @@ final class Audio8VoiceClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.httpBody = multipartBody(boundary: boundary, text: text, referenceText: referenceText, audio: audio)
+        request.httpBody = multipartBody(
+            boundary: boundary,
+            text: text,
+            referenceText: referenceText,
+            audio: audio,
+            audioURL: audioURL
+        )
 
         let task = session.dataTask(with: request) { data, response, error in
             if let error { completion(.failure(error)); return }
@@ -557,7 +598,7 @@ final class Audio8VoiceClient {
         }
     }
 
-    private func multipartBody(boundary: String, text: String, referenceText: String, audio: Data) -> Data {
+    private func multipartBody(boundary: String, text: String, referenceText: String, audio: Data, audioURL: URL) -> Data {
         var body = Data()
         func field(_ name: String, _ value: String) {
             body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".data(using: .utf8)!)
@@ -568,7 +609,14 @@ final class Audio8VoiceClient {
         field("top_p", "0.95")
         field("top_k", "50")
         field("max_new_tokens", "256")
-        body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"reference_audio\"; filename=\"reference.wav\"\r\nContent-Type: audio/wav\r\n\r\n".data(using: .utf8)!)
+        let ext = audioURL.pathExtension.lowercased()
+        let mimeType: String
+        switch ext {
+        case "mp3": mimeType = "audio/mpeg"
+        case "m4a": mimeType = "audio/mp4"
+        default: mimeType = "audio/wav"
+        }
+        body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"reference_audio\"; filename=\"reference.\(ext.isEmpty ? "wav" : ext)\"\r\nContent-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
         body.append(audio)
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
         return body
@@ -727,11 +775,14 @@ final class DynamicPersonalVoiceCache {
     }
 }
 
-final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDelegate {
+final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDelegate, UIDocumentPickerDelegate {
     private let store = PersonalVoicePackStore.shared
     private let client = Audio8VoiceClient()
     private let transcriptView = UITextView()
     private let recordButton = UIButton(type: .system)
+    private let importAudioButton = UIButton(type: .system)
+    private let importedAudioLabel = UILabel()
+    private let importAudioProgress = UIActivityIndicatorView(style: .medium)
     private let generateButton = UIButton(type: .system)
     private let enableSwitch = UISwitch()
     private let consentSwitch = UISwitch()
@@ -863,7 +914,16 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
         recordButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 50).isActive = true
         recordButton.addTarget(self, action: #selector(toggleRecording), for: .touchUpInside)
 
-        let playButton = makeButton(title: "试听录音", image: "play.fill", action: #selector(playRecording))
+        importAudioButton.configuration = tintedConfiguration(title: "上传 MP3/M4A/WAV 声音文件", image: "doc.badge.plus")
+        importAudioButton.addTarget(self, action: #selector(selectAudioFile), for: .touchUpInside)
+        importedAudioLabel.font = .systemFont(ofSize: 13)
+        importedAudioLabel.textColor = .secondaryLabel
+        importedAudioLabel.numberOfLines = 0
+        importedAudioLabel.isHidden = true
+        importAudioProgress.hidesWhenStopped = true
+        importAudioProgress.color = .systemBlue
+
+        let playButton = makeButton(title: "试听参考声音", image: "play.fill", action: #selector(playRecording))
         genderControl.selectedSegmentIndex = store.gender == .male ? 0 : 1
         genderControl.addTarget(self, action: #selector(changeGender), for: .valueChanged)
         let genderRow = makeRow(title: "声音类型（录音后自动判断，可修改）", control: genderControl)
@@ -873,8 +933,11 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
         previewGeneratedButton.addTarget(self, action: #selector(selectGeneratedPreview), for: .touchUpInside)
         let deleteButton = makeButton(title: "删除个人语音包", image: "trash", action: #selector(confirmDelete), color: .systemRed)
 
-        let intro = makeLabel("请朗读下方文字。录音与文字必须完全一致，建议在安静环境中录制10～20秒。")
-        let consentNotice = makeLabel("生成时，录音、逐字稿和导航词条将通过加密网络发送至 Hugging Face 托管的 Audio8 预览服务。生成结果保存在本机。请阅读隐私政策后自行决定是否使用。")
+        let intro = makeLabel("可现场录音，也可上传已有声音作为音色参考。")
+        let importRules = makeLabel("上传要求：支持 MP3、M4A、WAV；文件不超过15MB；时长0.5～30秒，建议10～20秒；仅含一位说话人，普通话清晰、无音乐、无混响、无明显噪声；请确认声音属于本人或已获得明确授权。文件通过校验后将以原格式用于生成。")
+        importRules.font = .systemFont(ofSize: 13)
+        importRules.textColor = .secondaryLabel
+        let consentNotice = makeLabel("生成时，参考声音、参考文本和导航词条将通过加密网络发送至在线语音生成服务。生成结果保存在本机。请阅读隐私政策后自行决定是否使用。")
         consentNotice.font = .systemFont(ofSize: 13)
         consentNotice.textColor = .secondaryLabel
         let consent = makeRow(title: "我同意上述处理，并确认声音已获授权", control: consentSwitch)
@@ -886,7 +949,11 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
         statusLabel.numberOfLines = 0
         progressView.progress = 0
 
-        let stack = UIStackView(arrangedSubviews: [intro, transcriptView, recordButton, playButton, genderRow, consentNotice, consent, generateButton, progressView, statusLabel, previewGeneratedButton, enabled, deleteButton])
+        let importStatusRow = UIStackView(arrangedSubviews: [importAudioProgress, importedAudioLabel])
+        importStatusRow.axis = .horizontal
+        importStatusRow.alignment = .center
+        importStatusRow.spacing = 8
+        let stack = UIStackView(arrangedSubviews: [intro, transcriptView, recordButton, importAudioButton, importStatusRow, importRules, playButton, genderRow, consentNotice, consent, generateButton, progressView, statusLabel, previewGeneratedButton, enabled, deleteButton])
         stack.axis = .vertical
         stack.spacing = 14
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -936,6 +1003,16 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
         return config
     }
 
+    private func tintedConfiguration(title: String, image: String) -> UIButton.Configuration {
+        var config = UIButton.Configuration.tinted()
+        config.title = title
+        config.image = UIImage(systemName: image)
+        config.imagePadding = 8
+        config.contentInsets = NSDirectionalEdgeInsets(top: 13, leading: 16, bottom: 13, trailing: 16)
+        config.cornerStyle = .medium
+        return config
+    }
+
     private func makeButton(title: String, image: String, action: Selector, color: UIColor = .systemBlue) -> UIButton {
         let button = UIButton(type: .system)
         var config = UIButton.Configuration.tinted()
@@ -966,6 +1043,168 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
         }
     }
 
+    @objc private func selectAudioFile() {
+        guard !isGenerating else {
+            showMessage("请先停止当前语音包生成任务。")
+            return
+        }
+        let mp3 = UTType(filenameExtension: "mp3") ?? .audio
+        let m4a = UTType(filenameExtension: "m4a") ?? .audio
+        let wav = UTType(filenameExtension: "wav") ?? .audio
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [mp3, m4a, wav], asCopy: true)
+        picker.delegate = self
+        picker.allowsMultipleSelection = false
+        present(picker, animated: true)
+    }
+
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let sourceURL = urls.first else { return }
+        importReferenceAudio(from: sourceURL)
+    }
+
+    private func importReferenceAudio(from sourceURL: URL) {
+        let ext = sourceURL.pathExtension.lowercased()
+        guard ["mp3", "m4a", "wav"].contains(ext) else {
+            showMessage("文件格式不支持，请选择 MP3、M4A 或 WAV 文件。")
+            return
+        }
+        setAudioImporting(true, message: "正在读取并转换声音文件…")
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            let accessGranted = sourceURL.startAccessingSecurityScopedResource()
+            defer {
+                if accessGranted { sourceURL.stopAccessingSecurityScopedResource() }
+            }
+            do {
+                let values = try sourceURL.resourceValues(forKeys: [.fileSizeKey, .nameKey])
+                let byteCount = values.fileSize ?? 0
+                guard byteCount > 0, byteCount <= 15 * 1024 * 1024 else {
+                    throw ImportAudioError.invalidSize
+                }
+                let sourceFile = try AVAudioFile(forReading: sourceURL)
+                let duration = Double(sourceFile.length) / sourceFile.processingFormat.sampleRate
+                guard duration.isFinite, (0.5...30).contains(duration) else {
+                    throw ImportAudioError.invalidDuration
+                }
+                let storedURL = try self.store.replaceReferenceAudio(with: sourceURL)
+                guard let player = try? AVAudioPlayer(contentsOf: storedURL),
+                      (0.5...30).contains(player.duration) else {
+                    throw ImportAudioError.conversionFailed
+                }
+                let detected = Self.detectGender(from: storedURL)
+                let fileName = values.name ?? sourceURL.lastPathComponent
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    self.recorder = nil
+                    self.store.gender = detected
+                    self.genderControl.selectedSegmentIndex = detected == .male ? 0 : 1
+                    self.recordButton.configuration = self.filledConfiguration(title: "重新录音", image: "mic.fill")
+                    self.importedAudioLabel.text = "已导入：\(fileName) · \(Self.durationText(duration)) · 将以原格式上传"
+                    self.importedAudioLabel.isHidden = false
+                    self.setAudioImporting(false)
+                    self.refreshStatus(extra: "声音文件导入成功，已自动判断为\(detected == .male ? "男声" : "女声")。")
+                    self.showMessage("声音文件导入成功。\n\n生成时将以原文件格式作为音色参考上传。")
+                }
+            } catch {
+                DispatchQueue.main.async { [weak self] in
+                    self?.setAudioImporting(false)
+                    self?.showMessage((error as? LocalizedError)?.errorDescription ?? "声音文件导入失败：\(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func setAudioImporting(_ importing: Bool, message: String? = nil) {
+        importAudioButton.isEnabled = !importing
+        recordButton.isEnabled = !importing
+        generateButton.isEnabled = !importing
+        if importing {
+            importAudioProgress.startAnimating()
+            importedAudioLabel.text = message
+            importedAudioLabel.isHidden = false
+        } else {
+            importAudioProgress.stopAnimating()
+        }
+    }
+
+    private enum ImportAudioError: LocalizedError {
+        case invalidSize
+        case invalidDuration
+        case conversionFailed
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidSize: return "声音文件必须大于0字节且不超过15MB。"
+            case .invalidDuration: return "声音时长必须在0.5～30秒之间，建议使用10～20秒的清晰单人语音。"
+            case .conversionFailed: return "无法读取或转换该声音文件，请确认文件未损坏且为有效的MP3/M4A音频。"
+            }
+        }
+    }
+
+    private static func convertToReferenceWAV(
+        sourceFile: AVAudioFile,
+        outputURL: URL,
+        progress: @escaping (Double) -> Void
+    ) throws {
+        guard let outputFormat = AVAudioFormat(
+            commonFormat: .pcmFormatInt16,
+            sampleRate: 44_100,
+            channels: 1,
+            interleaved: false
+        ) else {
+            throw ImportAudioError.conversionFailed
+        }
+        guard let converter = AVAudioConverter(from: sourceFile.processingFormat, to: outputFormat) else {
+            throw ImportAudioError.conversionFailed
+        }
+        if FileManager.default.fileExists(atPath: outputURL.path) {
+            try FileManager.default.removeItem(at: outputURL)
+        }
+        let outputFile = try AVAudioFile(forWriting: outputURL, settings: outputFormat.settings)
+        let inputFormat = sourceFile.processingFormat
+        let inputChunkSize: AVAudioFrameCount = 4_096
+        let ratio = outputFormat.sampleRate / inputFormat.sampleRate
+        let outputCapacity = AVAudioFrameCount(ceil(Double(inputChunkSize) * ratio)) + 64
+        var processedFrames: AVAudioFramePosition = 0
+
+        while processedFrames < sourceFile.length {
+            autoreleasepool {
+                progress(min(0.99, Double(processedFrames) / Double(max(1, sourceFile.length))))
+            }
+            guard let inputBuffer = AVAudioPCMBuffer(pcmFormat: inputFormat, frameCapacity: inputChunkSize),
+                  let outputBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: outputCapacity) else {
+                throw ImportAudioError.conversionFailed
+            }
+            try sourceFile.read(into: inputBuffer, frameCount: inputChunkSize)
+            guard inputBuffer.frameLength > 0 else { break }
+            processedFrames += AVAudioFramePosition(inputBuffer.frameLength)
+
+            var suppliedInput = false
+            var conversionError: NSError?
+            let status = converter.convert(to: outputBuffer, error: &conversionError) { _, inputStatus in
+                if suppliedInput {
+                    inputStatus.pointee = .noDataNow
+                    return nil
+                }
+                suppliedInput = true
+                inputStatus.pointee = .haveData
+                return inputBuffer
+            }
+            if let conversionError { throw conversionError }
+            guard status == .haveData || status == .inputRanDry || status == .endOfStream,
+                  outputBuffer.frameLength > 0 else {
+                throw ImportAudioError.conversionFailed
+            }
+            try outputFile.write(from: outputBuffer)
+        }
+        guard processedFrames > 0 else { throw ImportAudioError.conversionFailed }
+        progress(1)
+    }
+
+    private static func durationText(_ duration: TimeInterval) -> String {
+        String(format: "%.1f秒", duration)
+    }
+
     private func startRecording() {
         do {
             try store.ensureDirectory()
@@ -980,17 +1219,26 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
                 AVLinearPCMIsFloatKey: false,
                 AVLinearPCMIsBigEndianKey: false
             ]
-            recorder = try AVAudioRecorder(url: store.referenceAudioURL, settings: settings)
+            let recordingURL = store.recordingReferenceAudioURL
+            for ext in ["mp3", "m4a"] {
+                let oldURL = store.packDirectory.appendingPathComponent("reference.\(ext)")
+                if FileManager.default.fileExists(atPath: oldURL.path) {
+                    try FileManager.default.removeItem(at: oldURL)
+                }
+            }
+            recorder = try AVAudioRecorder(url: recordingURL, settings: settings)
             recorder?.delegate = self
             recorder?.record()
+            importedAudioLabel.text = nil
+            importedAudioLabel.isHidden = true
             recordButton.configuration = filledConfiguration(title: "停止录音", image: "stop.fill")
-            statusLabel.text = "正在录音，请完整朗读文字稿……"
+            statusLabel.text = "正在录音，请保持声音清晰、环境安静……"
         } catch { showMessage(error.localizedDescription) }
     }
 
     @objc private func playRecording() {
         guard FileManager.default.fileExists(atPath: store.referenceAudioURL.path) else {
-            showMessage("请先完成录音。")
+            showMessage("请先完成录音或上传声音文件。")
             return
         }
         do {
@@ -1106,14 +1354,14 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
             return
         }
         guard consentSwitch.isOn else { showMessage("请先确认声音授权。") ; return }
-        guard FileManager.default.fileExists(atPath: store.referenceAudioURL.path) else { showMessage("请先完成录音。") ; return }
+        guard FileManager.default.fileExists(atPath: store.referenceAudioURL.path) else { showMessage("请先完成录音或上传声音文件。") ; return }
         guard let recording = try? AVAudioPlayer(contentsOf: store.referenceAudioURL),
               (0.5...30).contains(recording.duration) else {
-            showMessage("参考录音必须在0.5～30秒之间，请重新录音。")
+            showMessage("参考声音必须在0.5～30秒之间，请重新录音或上传符合要求的文件。")
             return
         }
         let transcript = transcriptView.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !transcript.isEmpty else { showMessage("请输入与录音完全一致的文字稿。") ; return }
+        guard !transcript.isEmpty else { showMessage("请输入参考文本。") ; return }
         do {
             try store.saveReferenceText(transcript)
         } catch {
