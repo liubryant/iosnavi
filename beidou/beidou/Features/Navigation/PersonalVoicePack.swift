@@ -64,6 +64,7 @@ final class PersonalVoicePackStore {
         var gender: PersonalVoiceGender
         let createdAt: Date
         var allowsDynamicGeneration: Bool? = nil
+        var syncsExistingDynamicVoices: Bool? = nil
     }
 
     static let shared = PersonalVoicePackStore()
@@ -114,6 +115,14 @@ final class PersonalVoicePackStore {
     }
 
     var activeGender: PersonalVoiceGender { activePack?.gender ?? .male }
+
+    var shouldSyncExistingDynamicVoices: Bool {
+        selectedPack?.syncsExistingDynamicVoices == true
+    }
+
+    func setShouldSyncExistingDynamicVoices(_ enabled: Bool) {
+        updateSelectedPack { $0.syncsExistingDynamicVoices = enabled }
+    }
 
     var selectedPack: PackInfo? {
         guard let id = selectedPackID else { return nil }
@@ -343,7 +352,9 @@ final class PersonalVoicePackStore {
         guard let id = packID ?? selectedPackID,
               let data = try? Data(contentsOf: dynamicManifestURL(for: id)),
               let entries = try? JSONDecoder().decode([DynamicPersonalVoiceEntry].self, from: data) else { return [] }
-        let filtered = generatedOnly ? entries.filter { cachedDynamicAudioURL(forID: $0.id, packID: id) != nil } : entries
+        // 清单和页面统计只做轻量文件检查。逐个创建 AVAudioPlayer 验证数百条
+        // WAV 会阻塞主线程；真正播放和刚生成保存时仍会校验音频有效性。
+        let filtered = generatedOnly ? entries.filter { hasCachedDynamicAudio(forID: $0.id, packID: id) } : entries
         return filtered.sorted { $0.lastUsedAt > $1.lastUsedAt }
     }
 
@@ -381,6 +392,14 @@ final class PersonalVoicePackStore {
     private func cachedDynamicAudioURL(forID id: String, packID: String) -> URL? {
         let url = dynamicDirectory(for: packID).appendingPathComponent("\(id).wav")
         return isValidAudio(at: url) ? url : nil
+    }
+
+    private func hasCachedDynamicAudio(forID id: String, packID: String) -> Bool {
+        let url = dynamicDirectory(for: packID).appendingPathComponent("\(id).wav")
+        guard fileManager.fileExists(atPath: url.path),
+              let attributes = try? fileManager.attributesOfItem(atPath: url.path),
+              let byteCount = attributes[.size] as? NSNumber else { return false }
+        return byteCount.intValue > 1_000
     }
 
     private func saveDynamicEntries(_ entries: [DynamicPersonalVoiceEntry], packID: String) throws {
@@ -812,8 +831,11 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
 
     private func resumeDynamicBackfillIfNeeded() {
         guard store.generatedCount() == PersonalVoicePhrase.driveCatalog.count,
+              store.shouldSyncExistingDynamicVoices,
               let packID = store.selectedPackID else { return }
-        DynamicPersonalVoiceCache.shared.backfillExistingDynamicVoices(into: packID)
+        DispatchQueue.global(qos: .utility).async {
+            DynamicPersonalVoiceCache.shared.backfillExistingDynamicVoices(into: packID)
+        }
     }
 
     private func setupTopBar() {
@@ -1353,6 +1375,26 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
             refreshStatus()
             return
         }
+        presentGenerationOptions()
+    }
+
+    private func presentGenerationOptions() {
+        let alert = UIAlertController(
+            title: "生成语音包",
+            message: "是否在基础语音生成完成后，后台同步其他语音包已有的动态导航文本？同步会占用更多本机存储空间。无论选择哪项，实际导航中未命中的语音仍会按需生成。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "仅生成基础语音", style: .default) { [weak self] _ in
+            self?.startGeneration(syncExistingDynamicVoices: false)
+        })
+        alert.addAction(UIAlertAction(title: "生成并后台同步", style: .default) { [weak self] _ in
+            self?.startGeneration(syncExistingDynamicVoices: true)
+        })
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    private func startGeneration(syncExistingDynamicVoices: Bool) {
         guard consentSwitch.isOn else { showMessage("请先确认声音授权。") ; return }
         guard FileManager.default.fileExists(atPath: store.referenceAudioURL.path) else { showMessage("请先完成录音或上传声音文件。") ; return }
         guard let recording = try? AVAudioPlayer(contentsOf: store.referenceAudioURL),
@@ -1368,6 +1410,7 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
             showMessage("保存录音文字稿失败：\(error.localizedDescription)")
             return
         }
+        store.setShouldSyncExistingDynamicVoices(syncExistingDynamicVoices)
         isGenerating = true
         warmupRetryIndex = 0
         generateButton.configuration = filledConfiguration(title: "停止生成", image: "stop.fill")
@@ -1383,10 +1426,14 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
             enableSwitch.isOn = true
             generateButton.configuration = filledConfiguration(title: "语音包已完成", image: "checkmark.circle.fill")
             refreshStatus()
-            if let packID = store.selectedPackID {
+            if store.shouldSyncExistingDynamicVoices,
+               let packID = store.selectedPackID {
                 DynamicPersonalVoiceCache.shared.backfillExistingDynamicVoices(into: packID)
             }
-            showMessage("我的语音包生成完成。")
+            let message = store.shouldSyncExistingDynamicVoices
+                ? "我的语音包生成完成，正在后台同步其他语音包的动态导航文本。"
+                : "我的语音包基础语音生成完成。导航中未命中的语音仍会按需补充。"
+            showMessage(message)
             return
         }
         let done = PersonalVoicePhrase.driveCatalog.count - remaining.count

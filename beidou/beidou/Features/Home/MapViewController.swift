@@ -1203,10 +1203,11 @@ final class MapViewController: UIViewController {
     }
 
     @objc private func tapWeather() {
-        navigationController?.pushViewController(WeatherViewController(location: currentLocation), animated: true)
+        navigationController?.pushViewController(OpenMeteoWeatherViewController(location: currentLocation), animated: true)
     }
 
     @objc private func tapSunsetGlow() {
+        // 火烧云依赖旧天气页中的晚霞预测能力，保留并继续使用旧页面。
         navigationController?.pushViewController(WeatherViewController(location: currentLocation), animated: true)
     }
 
@@ -1247,7 +1248,7 @@ final class MapViewController: UIViewController {
         let weatherAction = UIAlertAction(title: "天气查询", style: .default) { [weak self] _ in
             guard let self else { return }
             self.navigationController?.pushViewController(
-                WeatherViewController(location: self.currentLocation),
+                OpenMeteoWeatherViewController(location: self.currentLocation),
                 animated: true
             )
         }
@@ -1332,7 +1333,7 @@ extension MapViewController: SideMenuViewControllerDelegate {
 
     func sideMenuDidSelectWeather(_ menu: SideMenuViewController) {
         sideMenuContainer?.closeMenu()
-        navigationController?.pushViewController(WeatherViewController(location: currentLocation), animated: true)
+        navigationController?.pushViewController(OpenMeteoWeatherViewController(location: currentLocation), animated: true)
     }
 
     func sideMenuDidSelectServiceAgreement(_ menu: SideMenuViewController) {
