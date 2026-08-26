@@ -14,6 +14,40 @@ import CoreLocation
 import AMapSearchKit
 #endif
 
+/// 与个人语音包页面主按钮一致的蓝紫渐变。
+private enum RouteActionGradient {
+    static let primaryColors = [
+            UIColor(red: 0.08, green: 0.58, blue: 1.00, alpha: 1),
+            UIColor(red: 0.12, green: 0.38, blue: 0.94, alpha: 1),
+            UIColor(red: 0.29, green: 0.31, blue: 0.90, alpha: 1)
+    ]
+
+    static let image = makeImage(colors: primaryColors)
+    static let paleBlueColors = [
+        UIColor(red: 0.94, green: 0.98, blue: 1.00, alpha: 1),
+        UIColor(red: 0.84, green: 0.92, blue: 1.00, alpha: 1)
+    ]
+    static let paleBlueImage = makeImage(colors: paleBlueColors)
+    static let paleBlueForeground = UIColor(red: 0.12, green: 0.42, blue: 0.76, alpha: 1)
+
+    static func makeImage(colors: [UIColor]) -> UIImage {
+        let size = CGSize(width: 320, height: 58)
+        return UIGraphicsImageRenderer(size: size).image { renderer in
+            guard let gradient = CGGradient(
+                colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                colors: colors.map(\.cgColor) as CFArray,
+                locations: [0, 0.56, 1]
+            ) else { return }
+            renderer.cgContext.drawLinearGradient(
+                gradient,
+                start: .zero,
+                end: CGPoint(x: size.width, y: 0),
+                options: []
+            )
+        }.resizableImage(withCapInsets: .zero, resizingMode: .stretch)
+    }
+}
+
 final class RoutePlanViewController: UIViewController {
 
     private let startLocation: CurrentLocation?
@@ -223,23 +257,34 @@ final class RoutePlanViewController: UIViewController {
         let swapButton = UIButton(type: .system)
         var swapConfiguration = UIButton.Configuration.plain()
         swapConfiguration.image = UIImage(
-            systemName: "arrow.up.arrow.down.circle.fill",
-            withConfiguration: UIImage.SymbolConfiguration(pointSize: 21, weight: .semibold)
+            systemName: "arrow.up.arrow.down",
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: 9, weight: .bold)
         )
-        swapConfiguration.baseForegroundColor = .systemBlue
-        swapConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4)
+        swapConfiguration.baseForegroundColor = .white
+        swapConfiguration.imageColorTransformer = UIConfigurationColorTransformer { _ in .white }
+        swapConfiguration.background.image = RouteActionGradient.image
+        swapConfiguration.background.imageContentMode = .scaleToFill
+        swapConfiguration.background.cornerRadius = 10
+        swapConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 3, leading: 3, bottom: 3, trailing: 3)
         swapButton.configuration = swapConfiguration
+        swapButton.layer.cornerRadius = 10
+        swapButton.layer.cornerCurve = .continuous
+        swapButton.layer.masksToBounds = false
+        swapButton.layer.shadowColor = UIColor(red: 0.12, green: 0.38, blue: 0.94, alpha: 1).cgColor
+        swapButton.layer.shadowOpacity = 0.22
+        swapButton.layer.shadowOffset = CGSize(width: 0, height: 2)
+        swapButton.layer.shadowRadius = 4
         swapButton.translatesAutoresizingMaskIntoConstraints = false
         swapButton.addTarget(self, action: #selector(tapSwap), for: .touchUpInside)
-        swapButton.widthAnchor.constraint(equalToConstant: 34).isActive = true
-        swapButton.heightAnchor.constraint(equalToConstant: 34).isActive = true
+        swapButton.widthAnchor.constraint(equalToConstant: 20).isActive = true
+        swapButton.heightAnchor.constraint(equalToConstant: 20).isActive = true
 
         let middleRow = UIView()
         separator.translatesAutoresizingMaskIntoConstraints = false
         middleRow.addSubview(separator)
         middleRow.addSubview(swapButton)
         NSLayoutConstraint.activate([
-            middleRow.heightAnchor.constraint(equalToConstant: 34),
+            middleRow.heightAnchor.constraint(equalToConstant: 40),
             separator.heightAnchor.constraint(equalToConstant: 1),
             separator.leadingAnchor.constraint(equalTo: middleRow.leadingAnchor, constant: 32),
             separator.trailingAnchor.constraint(equalTo: swapButton.leadingAnchor, constant: -8),
@@ -364,13 +409,24 @@ final class RoutePlanViewController: UIViewController {
 
         for (mode, button) in modeButtons {
             let selected = mode == naviMode
-            button.backgroundColor = selected ? .systemBlue : normalBackground
+            button.backgroundColor = .clear
             button.tintColor = selected ? .white : normalForeground
             button.setTitleColor(selected ? .white : normalForeground, for: .normal)
             if var configuration = button.configuration {
                 configuration.baseForegroundColor = selected ? .white : normalForeground
+                configuration.background.image = selected ? RouteActionGradient.image : nil
+                configuration.background.imageContentMode = .scaleToFill
+                configuration.background.backgroundColor = selected ? .clear : normalBackground
+                configuration.background.cornerRadius = 8
                 button.configuration = configuration
             }
+            button.layer.shadowColor = selected
+                ? UIColor(red: 0.12, green: 0.38, blue: 0.94, alpha: 1).cgColor
+                : UIColor.clear.cgColor
+            button.layer.shadowOpacity = selected ? 0.22 : 0
+            button.layer.shadowOffset = CGSize(width: 0, height: 4)
+            button.layer.shadowRadius = 7
+            button.layer.masksToBounds = false
         }
     }
 
@@ -396,35 +452,51 @@ final class RoutePlanViewController: UIViewController {
     // MARK: - 附近街景 / 开始导航
 
     private func setupSavedPlacesRow() -> UIView {
-        configureSavedPlaceButton(homePlaceButton, icon: "house.fill", action: #selector(tapHomePlace))
-        configureSavedPlaceButton(workPlaceButton, icon: "briefcase.fill", action: #selector(tapWorkPlace))
+        configureSavedPlaceButton(
+            homePlaceButton,
+            icon: "house.fill",
+            action: #selector(tapHomePlace)
+        )
+        configureSavedPlaceButton(
+            workPlaceButton,
+            icon: "briefcase.fill",
+            action: #selector(tapWorkPlace)
+        )
 
         let editButton = UIButton(type: .system)
-        var editConfiguration = UIButton.Configuration.tinted()
+        var editConfiguration = UIButton.Configuration.plain()
         editConfiguration.title = L10n.t("places.edit")
         editConfiguration.image = UIImage(systemName: "slider.horizontal.3")
         editConfiguration.imagePlacement = .leading
         editConfiguration.imagePadding = 6
         editConfiguration.cornerStyle = .medium
-        editConfiguration.baseForegroundColor = .systemBlue
+        editConfiguration.baseForegroundColor = RouteActionGradient.paleBlueForeground
+        editConfiguration.background.image = RouteActionGradient.paleBlueImage
+        editConfiguration.background.imageContentMode = .scaleToFill
+        editConfiguration.background.cornerRadius = 12
         editConfiguration.titleLineBreakMode = .byTruncatingTail
         editConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 6, bottom: 8, trailing: 6)
         editButton.configuration = editConfiguration
+        applyPaleBlueShadow(editButton)
         editButton.heightAnchor.constraint(equalToConstant: 76).isActive = true
         editButton.addTarget(self, action: #selector(tapEditPlaces), for: .touchUpInside)
 
         let voicePackButton = UIButton(type: .system)
-        var voiceConfiguration = UIButton.Configuration.tinted()
+        var voiceConfiguration = UIButton.Configuration.plain()
         voiceConfiguration.title = "我的语音包"
         voiceConfiguration.subtitle = "个人声音导航"
         voiceConfiguration.image = UIImage(systemName: "waveform.circle.fill")
         voiceConfiguration.imagePlacement = .leading
         voiceConfiguration.imagePadding = 6
         voiceConfiguration.cornerStyle = .medium
-        voiceConfiguration.baseForegroundColor = .systemPurple
+        voiceConfiguration.baseForegroundColor = RouteActionGradient.paleBlueForeground
+        voiceConfiguration.background.image = RouteActionGradient.paleBlueImage
+        voiceConfiguration.background.imageContentMode = .scaleToFill
+        voiceConfiguration.background.cornerRadius = 12
         voiceConfiguration.titleAlignment = .leading
         voiceConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)
         voicePackButton.configuration = voiceConfiguration
+        applyPaleBlueShadow(voicePackButton)
         voicePackButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 68).isActive = true
         voicePackButton.addTarget(self, action: #selector(tapVoicePack), for: .touchUpInside)
 
@@ -450,13 +522,16 @@ final class RoutePlanViewController: UIViewController {
     }
 
     private func configureSavedPlaceButton(_ button: UIButton, icon: String, action: Selector) {
-        var configuration = UIButton.Configuration.tinted()
+        var configuration = UIButton.Configuration.plain()
         configuration.image = UIImage(systemName: icon)
         configuration.imagePlacement = .leading
         configuration.imagePadding = 6
         configuration.titlePadding = 8
         configuration.cornerStyle = .medium
-        configuration.baseForegroundColor = .systemBlue
+        configuration.baseForegroundColor = RouteActionGradient.paleBlueForeground
+        configuration.background.image = RouteActionGradient.paleBlueImage
+        configuration.background.imageContentMode = .scaleToFill
+        configuration.background.cornerRadius = 12
         configuration.titleAlignment = .leading
         configuration.titleLineBreakMode = .byTruncatingTail
         configuration.subtitleLineBreakMode = .byTruncatingTail
@@ -467,11 +542,21 @@ final class RoutePlanViewController: UIViewController {
         }
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 10)
         button.configuration = configuration
-        button.clipsToBounds = true
+        applyPaleBlueShadow(button)
         button.titleLabel?.numberOfLines = 1
         button.titleLabel?.lineBreakMode = .byTruncatingTail
         button.heightAnchor.constraint(greaterThanOrEqualToConstant: 76).isActive = true
         button.addTarget(self, action: action, for: .touchUpInside)
+    }
+
+    private func applyPaleBlueShadow(_ button: UIButton) {
+        button.layer.cornerRadius = 12
+        button.layer.cornerCurve = .continuous
+        button.layer.masksToBounds = false
+        button.layer.shadowColor = UIColor(red: 0.33, green: 0.63, blue: 0.90, alpha: 1).cgColor
+        button.layer.shadowOpacity = 0.12
+        button.layer.shadowOffset = CGSize(width: 0, height: 4)
+        button.layer.shadowRadius = 7
     }
 
     private func updateSavedPlaceButtons() {
@@ -492,24 +577,12 @@ final class RoutePlanViewController: UIViewController {
 
     private func setupActionButtons() -> UIView {
         let nearButton = UIButton(type: .system)
-        nearButton.setTitle(L10n.t("route.near_panorama"), for: .normal)
-        nearButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
-        nearButton.titleLabel?.adjustsFontSizeToFitWidth = true
-        nearButton.titleLabel?.minimumScaleFactor = 0.82
-        nearButton.backgroundColor = .systemBlue
-        nearButton.setTitleColor(.white, for: .normal)
-        nearButton.layer.cornerRadius = 10
+        configurePrimaryActionButton(nearButton, title: L10n.t("route.near_panorama"))
         nearButton.heightAnchor.constraint(equalToConstant: 52).isActive = true
         nearButton.addTarget(self, action: #selector(tapNearPanorama), for: .touchUpInside)
 
         let naviButton = UIButton(type: .system)
-        naviButton.setTitle(L10n.t("route.start_navigation"), for: .normal)
-        naviButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
-        naviButton.titleLabel?.adjustsFontSizeToFitWidth = true
-        naviButton.titleLabel?.minimumScaleFactor = 0.82
-        naviButton.backgroundColor = .systemBlue
-        naviButton.setTitleColor(.white, for: .normal)
-        naviButton.layer.cornerRadius = 10
+        configurePrimaryActionButton(naviButton, title: L10n.t("route.start_navigation"))
         naviButton.heightAnchor.constraint(equalToConstant: 52).isActive = true
         naviButton.addTarget(self, action: #selector(tapStartNavi), for: .touchUpInside)
 
@@ -518,6 +591,29 @@ final class RoutePlanViewController: UIViewController {
         stack.distribution = .fillEqually
         stack.spacing = 12
         return stack
+    }
+
+    private func configurePrimaryActionButton(_ button: UIButton, title: String) {
+        var configuration = UIButton.Configuration.plain()
+        configuration.title = title
+        configuration.baseForegroundColor = .white
+        configuration.background.image = RouteActionGradient.image
+        configuration.background.imageContentMode = .scaleToFill
+        configuration.background.cornerRadius = 15
+        configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var outgoing = incoming
+            outgoing.font = .systemFont(ofSize: 15, weight: .semibold)
+            outgoing.foregroundColor = .white
+            return outgoing
+        }
+        button.configuration = configuration
+        button.layer.cornerRadius = 15
+        button.layer.cornerCurve = .continuous
+        button.layer.masksToBounds = false
+        button.layer.shadowColor = UIColor(red: 0.12, green: 0.38, blue: 0.94, alpha: 1).cgColor
+        button.layer.shadowOpacity = 0.24
+        button.layer.shadowOffset = CGSize(width: 0, height: 6)
+        button.layer.shadowRadius = 10
     }
 
     // MARK: - 信息流广告容器
@@ -683,7 +779,7 @@ final class RoutePlanViewController: UIViewController {
             return ("cloud.rain.fill", .systemBlue)
         }
         if value.contains("雷") || value.contains("thunder") || value.contains("storm") {
-            return ("cloud.bolt.rain.fill", .systemYellow)
+            return ("cloud.bolt.rain.fill", UIColor(red: 0.34, green: 0.42, blue: 0.78, alpha: 1))
         }
         if value.contains("雪") || value.contains("snow") {
             return ("cloud.snow.fill", .systemTeal)

@@ -100,7 +100,7 @@ final class PanoramaViewController: UIViewController {
     private func setupTitleLabel() {
         titleLabel.text = L10n.t("panorama.3d_title")
         titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
-        titleLabel.textColor = .black
+        titleLabel.textColor = .white
         titleLabel.textAlignment = .center
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 

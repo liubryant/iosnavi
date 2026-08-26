@@ -39,10 +39,6 @@ enum SpUtil {
         case cloudPanoramaWelcomeLastShownAt = "cloud_panorama_welcome_last_shown_at"
         /// 首页 720 云景推荐当天累计展示次数
         case cloudPanoramaWelcomeDailyCount = "cloud_panorama_welcome_daily_count"
-        /// 已浏览过的720云景区场景标识(场景URL)列表，用于判断是否达到评分提示阈值
-        case viewedCloudPanoramaSceneIDs = "viewed_cloud_panorama_scene_ids"
-        /// 浏览满2个720云景区后，是否已触发过系统评分提示(只触发一次，避免频繁请求)
-        case reviewPromptedAfterCloudScenes = "review_prompted_after_cloud_scenes"
         /// 上次火烧云预测结果 JSON 缓存
         case sunsetPredictionCache = "sunset_prediction_cache"
         /// 上次实时天气描述，用于首页底部天气胶囊复用天气页内容

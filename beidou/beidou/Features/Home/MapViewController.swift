@@ -1076,7 +1076,7 @@ final class MapViewController: UIViewController {
             return ("cloud.hail.fill", UIColor(red: 0.34, green: 0.64, blue: 0.94, alpha: 1))
         }
         if value.contains("雷") || value.contains("thunder") || value.contains("storm") {
-            return ("cloud.bolt.rain.fill", UIColor(red: 0.93, green: 0.68, blue: 0.18, alpha: 1))
+            return ("cloud.bolt.rain.fill", UIColor(red: 0.34, green: 0.42, blue: 0.78, alpha: 1))
         }
         if value.contains("暴雨") || value.contains("大暴雨") || value.contains("特大暴雨") || value.contains("heavy rain") {
             return ("cloud.heavyrain.fill", UIColor(red: 0.16, green: 0.48, blue: 0.90, alpha: 1))

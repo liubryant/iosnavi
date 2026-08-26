@@ -278,6 +278,15 @@ final class RootViewController: UIViewController {
         switch destination {
         case .map:
             navigationController.popToRootViewController(animated: true)
+        case .home:
+            navigateToSavedPlace(.home, on: navigationController)
+        case .work:
+            navigateToSavedPlace(.work, on: navigationController)
+        case .weather:
+            navigationController.pushViewController(
+                OpenMeteoWeatherViewController(location: LocationManager.shared.lastKnownLocation),
+                animated: true
+            )
         case .cloud:
             pushCloudPanorama(on: navigationController)
         case .typhoon:
@@ -333,14 +342,7 @@ final class RootViewController: UIViewController {
 
         if let navigationController = currentChild as? UINavigationController {
             if let kind = AppShortcutManager.consumePendingSavedPlaceKind() {
-                if let destination = SavedPlaceStore.place(for: kind) {
-                    pushLastDestinationNavigation(on: navigationController, destination: destination)
-                } else {
-                    navigationController.pushViewController(
-                        SavedPlacesViewController(currentLocation: LocationManager.shared.lastKnownLocation),
-                        animated: true
-                    )
-                }
+                navigateToSavedPlace(kind, on: navigationController)
                 return
             }
             if AppShortcutManager.hasPendingCloudPanorama {
@@ -391,6 +393,17 @@ final class RootViewController: UIViewController {
         }
         viewControllers.append(naviVC)
         navigationController.setViewControllers(viewControllers, animated: true)
+    }
+
+    private func navigateToSavedPlace(_ kind: SavedPlaceKind, on navigationController: UINavigationController) {
+        if let destination = SavedPlaceStore.place(for: kind) {
+            pushLastDestinationNavigation(on: navigationController, destination: destination)
+        } else {
+            navigationController.pushViewController(
+                SavedPlacesViewController(currentLocation: LocationManager.shared.lastKnownLocation),
+                animated: true
+            )
+        }
     }
 
     private func currentLocationPOI() -> SelectedPOI {

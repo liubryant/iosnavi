@@ -44,6 +44,10 @@ final class SideMenuViewController: UIViewController {
         // preserving enough contrast for all menu content.
         view.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.94)
         view.isOpaque = false
+        view.layer.cornerRadius = 24
+        view.layer.cornerCurve = .continuous
+        view.layer.maskedCorners = [.layerMaxXMinYCorner, .layerMaxXMaxYCorner]
+        view.layer.masksToBounds = true
 
         let scrollView = UIScrollView()
         scrollView.translatesAutoresizingMaskIntoConstraints = false

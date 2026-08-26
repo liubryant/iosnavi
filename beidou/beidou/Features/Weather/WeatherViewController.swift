@@ -712,7 +712,7 @@ final class WeatherViewController: UIViewController {
             return ("cloud.rain.fill", .systemBlue)
         }
         if value.contains("雷") || value.contains("thunder") || value.contains("storm") {
-            return ("cloud.bolt.rain.fill", .systemYellow)
+            return ("cloud.bolt.rain.fill", UIColor(red: 0.34, green: 0.42, blue: 0.78, alpha: 1))
         }
         if value.contains("雪") || value.contains("snow") {
             return ("cloud.snow.fill", .systemTeal)

@@ -58,7 +58,7 @@ final class SavedPlacesViewController: UIViewController {
 
         titleLabel.text = L10n.t("places.title")
         titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
-        titleLabel.textColor = .label
+        titleLabel.textColor = .black
         titleLabel.textAlignment = .center
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
@@ -86,7 +86,7 @@ final class SavedPlacesViewController: UIViewController {
         let hintLabel = UILabel()
         hintLabel.text = L10n.t("places.hint")
         hintLabel.font = .systemFont(ofSize: 14)
-        hintLabel.textColor = .secondaryLabel
+        hintLabel.textColor = .black
         hintLabel.numberOfLines = 0
 
         stackView.axis = .vertical
@@ -128,7 +128,20 @@ final class SavedPlacesViewController: UIViewController {
         configuration.titleAlignment = .leading
         configuration.titleLineBreakMode = .byTruncatingTail
         configuration.subtitleLineBreakMode = .byTruncatingTail
-        configuration.baseForegroundColor = color(for: kind)
+        configuration.baseForegroundColor = .black
+        configuration.imageColorTransformer = UIConfigurationColorTransformer { _ in
+            UIColor(red: 0.12, green: 0.42, blue: 0.76, alpha: 1)
+        }
+        configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var outgoing = incoming
+            outgoing.foregroundColor = .black
+            return outgoing
+        }
+        configuration.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var outgoing = incoming
+            outgoing.foregroundColor = .black
+            return outgoing
+        }
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 16, leading: 18, bottom: 16, trailing: 18)
         configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 22, weight: .semibold)
         button.configuration = configuration
@@ -156,16 +169,11 @@ final class SavedPlacesViewController: UIViewController {
             configuration?.subtitle = place.map {
                 $0.address.isEmpty ? $0.name : "\($0.name) · \($0.address)"
             } ?? L10n.t("places.not_set")
-            configuration?.baseForegroundColor = color(for: kind)
+            configuration?.baseForegroundColor = .black
+            configuration?.imageColorTransformer = UIConfigurationColorTransformer { _ in
+                UIColor(red: 0.12, green: 0.42, blue: 0.76, alpha: 1)
+            }
             button.configuration = configuration
-        }
-    }
-
-    private func color(for kind: SavedPlaceKind) -> UIColor {
-        switch kind {
-        case .home: return .systemOrange
-        case .work: return .systemBlue
-        case .favorite: return .systemPurple
         }
     }
 

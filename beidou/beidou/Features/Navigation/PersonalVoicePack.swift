@@ -794,24 +794,390 @@ final class DynamicPersonalVoiceCache {
     }
 }
 
-final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDelegate, UIDocumentPickerDelegate {
+/// 个人语音包顶部的视频式引导。视频为本地资源，不消耗流量；文字覆盖层
+/// 跟随视频进度切换，即使视频资源异常也能完整展示操作步骤。
+private final class PersonalVoiceGradientButton: UIButton {
+    private static let backgroundColors = [
+        UIColor(red: 0.08, green: 0.58, blue: 1.0, alpha: 1).cgColor,
+        UIColor(red: 0.12, green: 0.38, blue: 0.94, alpha: 1).cgColor,
+        UIColor(red: 0.29, green: 0.31, blue: 0.90, alpha: 1).cgColor
+    ]
+
+    private static func makeGradientBackgroundImage(size: CGSize) -> UIImage {
+        UIGraphicsImageRenderer(size: size).image { context in
+            guard let gradient = CGGradient(
+                colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                colors: backgroundColors as CFArray,
+                locations: [0, 0.55, 1]
+            ) else { return }
+            context.cgContext.drawLinearGradient(
+                gradient,
+                start: CGPoint(x: 0, y: size.height / 2),
+                end: CGPoint(x: size.width, y: size.height / 2),
+                options: []
+            )
+        }
+    }
+
+    static let gradientBackgroundImage: UIImage = {
+        makeGradientBackgroundImage(size: CGSize(width: 320, height: 58))
+            .resizableImage(withCapInsets: UIEdgeInsets(top: 20, left: 70, bottom: 20, right: 70), resizingMode: .stretch)
+    }()
+
+    /// 顶部紧凑按钮不能使用宽按钮的 capInsets，否则左右渐变会被压缩。
+    static let compactGradientBackgroundImage = makeGradientBackgroundImage(
+        size: CGSize(width: 96, height: 42)
+    )
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setupStyle()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupStyle()
+    }
+
+    override var isEnabled: Bool {
+        didSet { alpha = isEnabled ? 1 : 0.48 }
+    }
+
+    private func setupStyle() {
+        layer.cornerRadius = 15
+        layer.cornerCurve = .continuous
+        layer.shadowColor = UIColor(red: 0.05, green: 0.35, blue: 0.90, alpha: 1).cgColor
+        layer.shadowOpacity = 0.24
+        layer.shadowRadius = 10
+        layer.shadowOffset = CGSize(width: 0, height: 6)
+        tintColor = .white
+        setTitleColor(.white, for: .normal)
+        setTitleColor(UIColor.white.withAlphaComponent(0.72), for: .disabled)
+        titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        addTarget(self, action: #selector(pressDown), for: [.touchDown, .touchDragEnter])
+        addTarget(self, action: #selector(pressUp), for: [.touchUpInside, .touchCancel, .touchDragExit])
+    }
+
+    @objc private func pressDown() {
+        UIView.animate(withDuration: 0.12) { self.transform = CGAffineTransform(scaleX: 0.975, y: 0.975) }
+    }
+
+    @objc private func pressUp() {
+        UIView.animate(withDuration: 0.18, delay: 0, options: [.curveEaseOut]) { self.transform = .identity }
+    }
+}
+
+private final class PersonalVoiceGuideView: UIView {
+    private struct Step {
+        let number: String
+        let title: String
+        let detail: String
+        let symbol: String
+        let color: UIColor
+    }
+
+    private let steps: [Step] = [
+        .init(number: "01", title: "准备一段清晰声音", detail: "录制或上传 10～20 秒单人声音", symbol: "waveform.and.mic", color: .systemBlue),
+        .init(number: "02", title: "填写参考文字", detail: "无需逐字一致，声音清晰即可", symbol: "text.quote", color: .systemTeal),
+        .init(number: "03", title: "确认授权并生成", detail: "生成期间请保持当前页面开启", symbol: "wand.and.stars", color: .systemOrange),
+        .init(number: "04", title: "试听并开启使用", detail: "导航时会优先播放你的声音", symbol: "checkmark.seal.fill", color: .systemPurple)
+    ]
+
+    private let playerContainer = UIView()
+    private let playerLayer = AVPlayerLayer()
+    private let shadeView = UIView()
+    private let badgeLabel = UILabel()
+    private let iconView = UIImageView()
+    private let presenterView = UIImageView()
+    private let titleLabel = UILabel()
+    private let detailLabel = UILabel()
+    private let progressStack = UIStackView()
+    private let detailsStack = UIStackView()
+    private let expandButton = UIButton(type: .system)
+    private let replayButton = UIButton(type: .system)
+    private var player: AVPlayer?
+    private var timeObserver: Any?
+    private var endObserver: NSObjectProtocol?
+    private var currentStep = -1
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        buildUI()
+        configurePlayer()
+        showStep(0, animated: false)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    deinit {
+        if let timeObserver { player?.removeTimeObserver(timeObserver) }
+        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        playerLayer.frame = playerContainer.bounds
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window != nil {
+            startPresenterAnimationIfNeeded()
+        } else {
+            presenterView.layer.removeAnimation(forKey: "presenterNaturalMotion")
+        }
+    }
+
+    func play() { player?.play() }
+    func pause() { player?.pause() }
+
+    private func buildUI() {
+        backgroundColor = .secondarySystemGroupedBackground
+        layer.cornerRadius = 22
+        layer.cornerCurve = .continuous
+        layer.shadowColor = UIColor.black.cgColor
+        layer.shadowOpacity = 0.06
+        layer.shadowRadius = 18
+        layer.shadowOffset = CGSize(width: 0, height: 8)
+
+        let heading = UILabel()
+        heading.text = "1 分钟学会制作"
+        heading.font = .systemFont(ofSize: 19, weight: .bold)
+        heading.textColor = .label
+        let subheading = UILabel()
+        subheading.text = "跟着视频完成 4 个步骤"
+        subheading.font = .systemFont(ofSize: 12, weight: .medium)
+        subheading.textColor = .secondaryLabel
+        let headingStack = UIStackView(arrangedSubviews: [heading, subheading])
+        headingStack.axis = .vertical
+        headingStack.spacing = 2
+
+        replayButton.setImage(UIImage(systemName: "arrow.counterclockwise"), for: .normal)
+        replayButton.setTitle(" 重播", for: .normal)
+        replayButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
+        replayButton.addTarget(self, action: #selector(replay), for: .touchUpInside)
+        let topRow = UIStackView(arrangedSubviews: [headingStack, UIView(), replayButton])
+        topRow.alignment = .center
+
+        playerContainer.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.08)
+        playerContainer.layer.cornerRadius = 17
+        playerContainer.layer.cornerCurve = .continuous
+        playerContainer.clipsToBounds = true
+        playerContainer.heightAnchor.constraint(equalTo: playerContainer.widthAnchor, multiplier: 406.0 / 720.0).isActive = true
+        playerLayer.videoGravity = .resizeAspectFill
+        playerContainer.layer.addSublayer(playerLayer)
+
+        shadeView.backgroundColor = UIColor.black.withAlphaComponent(0.03)
+        shadeView.isUserInteractionEnabled = false
+        shadeView.translatesAutoresizingMaskIntoConstraints = false
+        playerContainer.addSubview(shadeView)
+
+        badgeLabel.font = .monospacedDigitSystemFont(ofSize: 13, weight: .bold)
+        badgeLabel.textAlignment = .left
+        iconView.contentMode = .scaleAspectFit
+        iconView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 26, weight: .semibold)
+        titleLabel.font = .systemFont(ofSize: 22, weight: .bold)
+        titleLabel.textColor = UIColor(red: 0.08, green: 0.13, blue: 0.23, alpha: 1)
+        titleLabel.adjustsFontSizeToFitWidth = true
+        titleLabel.minimumScaleFactor = 0.78
+        detailLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        detailLabel.textColor = UIColor(red: 0.34, green: 0.40, blue: 0.50, alpha: 1)
+        detailLabel.numberOfLines = 2
+
+        let textStack = UIStackView(arrangedSubviews: [titleLabel, detailLabel])
+        textStack.axis = .vertical
+        textStack.spacing = 7
+        let videoContent = UIStackView(arrangedSubviews: [badgeLabel, textStack])
+        videoContent.axis = .vertical
+        videoContent.alignment = .leading
+        videoContent.spacing = 12
+        videoContent.translatesAutoresizingMaskIntoConstraints = false
+        playerContainer.addSubview(videoContent)
+
+        // 人物使用独立常驻图层，不依赖 AVPlayer 的首帧解码；页面一进入就显示。
+        presenterView.image = UIImage(named: "personal_voice_presenter")
+        presenterView.contentMode = .scaleAspectFit
+        presenterView.translatesAutoresizingMaskIntoConstraints = false
+        presenterView.isUserInteractionEnabled = false
+        playerContainer.addSubview(presenterView)
+
+        progressStack.axis = .horizontal
+        progressStack.spacing = 6
+        progressStack.distribution = .fillEqually
+        for _ in steps {
+            let segment = UIView()
+            segment.backgroundColor = UIColor.label.withAlphaComponent(0.12)
+            segment.layer.cornerRadius = 2
+            segment.heightAnchor.constraint(equalToConstant: 4).isActive = true
+            progressStack.addArrangedSubview(segment)
+        }
+
+        detailsStack.axis = .vertical
+        detailsStack.spacing = 9
+        detailsStack.isHidden = true
+        for (index, step) in steps.enumerated() {
+            let marker = UILabel()
+            marker.text = "\(index + 1)"
+            marker.textAlignment = .center
+            marker.font = .systemFont(ofSize: 12, weight: .bold)
+            marker.textColor = .white
+            marker.backgroundColor = step.color
+            marker.layer.cornerRadius = 12
+            marker.clipsToBounds = true
+            marker.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([marker.widthAnchor.constraint(equalToConstant: 24), marker.heightAnchor.constraint(equalToConstant: 24)])
+            let text = UILabel()
+            text.text = "\(step.title) · \(step.detail)"
+            text.numberOfLines = 0
+            text.font = .systemFont(ofSize: 13, weight: .medium)
+            text.textColor = .secondaryLabel
+            let row = UIStackView(arrangedSubviews: [marker, text])
+            row.alignment = .center
+            row.spacing = 9
+            detailsStack.addArrangedSubview(row)
+        }
+
+        expandButton.setTitle("查看完整步骤", for: .normal)
+        expandButton.setImage(UIImage(systemName: "chevron.down"), for: .normal)
+        expandButton.semanticContentAttribute = .forceRightToLeft
+        expandButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
+        expandButton.addTarget(self, action: #selector(toggleDetails), for: .touchUpInside)
+
+        let stack = UIStackView(arrangedSubviews: [topRow, playerContainer, progressStack, expandButton, detailsStack])
+        stack.axis = .vertical
+        stack.spacing = 12
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: 16),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -14),
+            shadeView.topAnchor.constraint(equalTo: playerContainer.topAnchor),
+            shadeView.leadingAnchor.constraint(equalTo: playerContainer.leadingAnchor),
+            shadeView.trailingAnchor.constraint(equalTo: playerContainer.trailingAnchor),
+            shadeView.bottomAnchor.constraint(equalTo: playerContainer.bottomAnchor),
+            videoContent.leadingAnchor.constraint(equalTo: playerContainer.leadingAnchor, constant: 20),
+            videoContent.trailingAnchor.constraint(lessThanOrEqualTo: presenterView.leadingAnchor, constant: -6),
+            videoContent.topAnchor.constraint(equalTo: playerContainer.topAnchor, constant: 18),
+            badgeLabel.heightAnchor.constraint(equalToConstant: 22),
+            presenterView.trailingAnchor.constraint(equalTo: playerContainer.trailingAnchor, constant: -2),
+            presenterView.bottomAnchor.constraint(equalTo: playerContainer.bottomAnchor),
+            presenterView.heightAnchor.constraint(equalTo: playerContainer.heightAnchor, multiplier: 0.94),
+            presenterView.widthAnchor.constraint(equalTo: presenterView.heightAnchor, multiplier: 2.0 / 3.0)
+        ])
+    }
+
+    private func configurePlayer() {
+        guard let url = Bundle.main.url(forResource: "personal_voice_guide", withExtension: "mp4") else { return }
+        let player = AVPlayer(url: url)
+        player.isMuted = true
+        player.actionAtItemEnd = .none
+        self.player = player
+        playerLayer.player = player
+        let interval = CMTime(seconds: 0.25, preferredTimescale: 600)
+        timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+            let seconds = max(0, CMTimeGetSeconds(time))
+            self?.showStep(min(3, Int(seconds / 4)), animated: true)
+        }
+        endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: player.currentItem, queue: .main) { [weak self] _ in
+            self?.player?.seek(to: .zero)
+            self?.player?.play()
+        }
+        player.play()
+    }
+
+    private func startPresenterAnimationIfNeeded() {
+        guard presenterView.layer.animation(forKey: "presenterNaturalMotion") == nil else { return }
+
+        // 小幅呼吸 + 上下浮动 + 身体轻摆。使用关键帧合成为一个动画，
+        // 不修改 Auto Layout 约束，也不会在页面滚动或展开步骤时跳位。
+        let motion = CAKeyframeAnimation(keyPath: "transform")
+        motion.values = [
+            CATransform3DIdentity,
+            CATransform3DConcat(
+                CATransform3DMakeTranslation(-2.5, -4.0, 0),
+                CATransform3DConcat(CATransform3DMakeRotation(-0.012, 0, 0, 1), CATransform3DMakeScale(1.018, 1.018, 1))
+            ),
+            CATransform3DConcat(
+                CATransform3DMakeTranslation(2.5, -6.0, 0),
+                CATransform3DConcat(CATransform3DMakeRotation(0.010, 0, 0, 1), CATransform3DMakeScale(1.025, 1.025, 1))
+            ),
+            CATransform3DConcat(
+                CATransform3DMakeTranslation(1.2, -2.5, 0),
+                CATransform3DConcat(CATransform3DMakeRotation(0.006, 0, 0, 1), CATransform3DMakeScale(1.012, 1.012, 1))
+            ),
+            CATransform3DIdentity
+        ]
+        motion.keyTimes = [0, 0.24, 0.5, 0.76, 1]
+        motion.timingFunctions = [
+            CAMediaTimingFunction(name: .easeInEaseOut),
+            CAMediaTimingFunction(name: .easeInEaseOut),
+            CAMediaTimingFunction(name: .easeInEaseOut),
+            CAMediaTimingFunction(name: .easeInEaseOut)
+        ]
+        motion.duration = 4.2
+        motion.repeatCount = .infinity
+        motion.isRemovedOnCompletion = false
+        presenterView.layer.add(motion, forKey: "presenterNaturalMotion")
+    }
+
+    private func showStep(_ index: Int, animated: Bool) {
+        guard steps.indices.contains(index), currentStep != index else { return }
+        currentStep = index
+        let apply = {
+            let step = self.steps[index]
+            self.badgeLabel.text = step.number
+            self.badgeLabel.textColor = step.color
+            self.badgeLabel.backgroundColor = .clear
+            self.iconView.image = UIImage(systemName: step.symbol)
+            self.iconView.tintColor = step.color
+            self.titleLabel.text = step.title
+            self.detailLabel.text = step.detail
+            for (segmentIndex, segment) in self.progressStack.arrangedSubviews.enumerated() {
+                segment.backgroundColor = segmentIndex == index ? step.color : UIColor.label.withAlphaComponent(0.12)
+            }
+        }
+        if animated {
+            UIView.transition(with: playerContainer, duration: 0.25, options: [.transitionCrossDissolve, .allowAnimatedContent], animations: apply)
+        } else { apply() }
+    }
+
+    @objc private func replay() {
+        player?.seek(to: .zero)
+        showStep(0, animated: true)
+        player?.play()
+    }
+
+    @objc private func toggleDetails() {
+        let willShow = detailsStack.isHidden
+        detailsStack.isHidden = !willShow
+        expandButton.setTitle(willShow ? "收起步骤" : "查看完整步骤", for: .normal)
+        expandButton.setImage(UIImage(systemName: willShow ? "chevron.up" : "chevron.down"), for: .normal)
+        UIView.animate(withDuration: 0.25) { self.superview?.layoutIfNeeded() }
+    }
+}
+
+final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDelegate, AVAudioPlayerDelegate, UIDocumentPickerDelegate {
     private let store = PersonalVoicePackStore.shared
     private let client = Audio8VoiceClient()
     private let transcriptView = UITextView()
-    private let recordButton = UIButton(type: .system)
-    private let importAudioButton = UIButton(type: .system)
+    private let recordButton = PersonalVoiceGradientButton(type: .system)
+    private let importAudioButton = PersonalVoiceGradientButton(type: .system)
     private let importedAudioLabel = UILabel()
     private let importAudioProgress = UIActivityIndicatorView(style: .medium)
-    private let generateButton = UIButton(type: .system)
+    private let generateButton = PersonalVoiceGradientButton(type: .system)
     private let enableSwitch = UISwitch()
     private let consentSwitch = UISwitch()
     private let genderControl = UISegmentedControl(items: ["男声", "女声"])
     private let statusLabel = UILabel()
     private let progressView = UIProgressView(progressViewStyle: .default)
-    private let previewGeneratedButton = UIButton(type: .system)
+    private let previewGeneratedButton = PersonalVoiceGradientButton(type: .system)
+    private let referencePreviewButton = PersonalVoiceGradientButton(type: .system)
     private let backButton = UIButton(type: .system)
-    private let renameButton = UIButton(type: .system)
+    private let renameButton = PersonalVoiceGradientButton(type: .system)
     private let titleLabel = UILabel()
+    private let guideView = PersonalVoiceGuideView()
     private var recorder: AVAudioRecorder?
     private var previewPlayer: AVAudioPlayer?
     private var activeTask: URLSessionDataTask?
@@ -858,15 +1224,21 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(titleLabel)
 
-        var renameConfiguration = UIButton.Configuration.tinted()
+        var renameConfiguration = UIButton.Configuration.plain()
         renameConfiguration.image = UIImage(
             systemName: "ellipsis",
-            withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .bold)
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .bold)
         )
-        renameConfiguration.baseForegroundColor = .systemBlue
-        renameConfiguration.cornerStyle = .capsule
-        renameConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 13, bottom: 8, trailing: 13)
+        renameConfiguration.baseForegroundColor = .white
+        renameConfiguration.imageColorTransformer = UIConfigurationColorTransformer { _ in .white }
+        renameConfiguration.background.backgroundColor = .clear
+        renameConfiguration.background.image = PersonalVoiceGradientButton.compactGradientBackgroundImage
+        renameConfiguration.background.imageContentMode = .scaleToFill
+        renameConfiguration.background.cornerRadius = 12
+        renameConfiguration.cornerStyle = .medium
+        renameConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10)
         renameButton.configuration = renameConfiguration
+        renameButton.layer.cornerRadius = 12
         renameButton.accessibilityLabel = "修改语音包名称"
         renameButton.translatesAutoresizingMaskIntoConstraints = false
         renameButton.addTarget(self, action: #selector(renamePack), for: .touchUpInside)
@@ -883,8 +1255,8 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
             titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: renameButton.leadingAnchor, constant: -8),
             renameButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
             renameButton.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
-            renameButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 42),
-            renameButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 38)
+            renameButton.widthAnchor.constraint(equalToConstant: 36),
+            renameButton.heightAnchor.constraint(equalToConstant: 34)
         ])
     }
 
@@ -916,6 +1288,14 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         recorder?.stop()
+        previewPlayer?.stop()
+        stopReferenceWaveAnimation()
+        guideView.pause()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guideView.play()
     }
 
     private func setupUI() {
@@ -926,13 +1306,7 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
         transcriptView.layer.cornerRadius = 10
         transcriptView.heightAnchor.constraint(equalToConstant: 92).isActive = true
 
-        var recordConfig = UIButton.Configuration.filled()
-        recordConfig.title = "开始录音"
-        recordConfig.image = UIImage(systemName: "mic.fill")
-        recordConfig.imagePadding = 8
-        recordConfig.contentInsets = NSDirectionalEdgeInsets(top: 13, leading: 16, bottom: 13, trailing: 16)
-        recordConfig.cornerStyle = .medium
-        recordButton.configuration = recordConfig
+        recordButton.configuration = filledConfiguration(title: "开始录音", image: "mic.fill")
         recordButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 50).isActive = true
         recordButton.addTarget(self, action: #selector(toggleRecording), for: .touchUpInside)
 
@@ -945,7 +1319,9 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
         importAudioProgress.hidesWhenStopped = true
         importAudioProgress.color = .systemBlue
 
-        let playButton = makeButton(title: "试听参考声音", image: "play.fill", action: #selector(playRecording))
+        referencePreviewButton.configuration = filledConfiguration(title: "试听参考声音", image: "play.fill")
+        referencePreviewButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 50).isActive = true
+        referencePreviewButton.addTarget(self, action: #selector(playRecording), for: .touchUpInside)
         genderControl.selectedSegmentIndex = store.gender == .male ? 0 : 1
         genderControl.addTarget(self, action: #selector(changeGender), for: .valueChanged)
         let genderRow = makeRow(title: "声音类型（录音后自动判断，可修改）", control: genderControl)
@@ -955,11 +1331,11 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
         previewGeneratedButton.addTarget(self, action: #selector(selectGeneratedPreview), for: .touchUpInside)
         let deleteButton = makeButton(title: "删除个人语音包", image: "trash", action: #selector(confirmDelete), color: .systemRed)
 
-        let intro = makeLabel("可现场录音，也可上传已有声音作为音色参考。")
-        let importRules = makeLabel("上传要求：支持 MP3、M4A、WAV；文件不超过15MB；时长0.5～30秒，建议10～20秒；仅含一位说话人，普通话清晰、无音乐、无混响、无明显噪声；请确认声音属于本人或已获得明确授权。文件通过校验后将以原格式用于生成。")
+        let intro = makeLabel("准备一段清晰人声，下方文字可按实际内容填写，无需逐字一致。")
+        let importRules = makeLabel("声音要求：MP3/M4A/WAV，0.5～30秒且不超过15MB；建议使用10～20秒清晰单人声音。")
         importRules.font = .systemFont(ofSize: 13)
         importRules.textColor = .secondaryLabel
-        let consentNotice = makeLabel("生成时，参考声音、参考文本和导航词条将通过加密网络发送至在线语音生成服务。生成结果保存在本机。请阅读隐私政策后自行决定是否使用。")
+        let consentNotice = makeLabel("生成时会将参考声音、对应文字和导航词条加密发送至在线生成服务，生成结果保存在本机。")
         consentNotice.font = .systemFont(ofSize: 13)
         consentNotice.textColor = .secondaryLabel
         let consent = makeRow(title: "我同意上述处理，并确认声音已获授权", control: consentSwitch)
@@ -975,7 +1351,7 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
         importStatusRow.axis = .horizontal
         importStatusRow.alignment = .center
         importStatusRow.spacing = 8
-        let stack = UIStackView(arrangedSubviews: [intro, transcriptView, recordButton, importAudioButton, importStatusRow, importRules, playButton, genderRow, consentNotice, consent, generateButton, progressView, statusLabel, previewGeneratedButton, enabled, deleteButton])
+        let stack = UIStackView(arrangedSubviews: [guideView, intro, transcriptView, recordButton, importAudioButton, importStatusRow, importRules, referencePreviewButton, genderRow, consentNotice, consent, generateButton, progressView, statusLabel, previewGeneratedButton, enabled, deleteButton])
         stack.axis = .vertical
         stack.spacing = 14
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -1016,32 +1392,50 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
     }
 
     private func filledConfiguration(title: String, image: String) -> UIButton.Configuration {
-        var config = UIButton.Configuration.filled()
-        config.title = title
+        var config = UIButton.Configuration.plain()
+        var attributedTitle = AttributedString(title)
+        attributedTitle.foregroundColor = .white
+        attributedTitle.font = .systemFont(ofSize: 16, weight: .semibold)
+        config.attributedTitle = attributedTitle
         config.image = UIImage(systemName: image)
         config.imagePadding = 8
+        config.baseForegroundColor = .white
+        config.imageColorTransformer = UIConfigurationColorTransformer { _ in .white }
+        config.background.backgroundColor = .clear
+        config.background.image = PersonalVoiceGradientButton.gradientBackgroundImage
+        config.background.imageContentMode = .scaleToFill
+        config.background.cornerRadius = 15
         config.contentInsets = NSDirectionalEdgeInsets(top: 13, leading: 16, bottom: 13, trailing: 16)
         config.cornerStyle = .medium
         return config
     }
 
     private func tintedConfiguration(title: String, image: String) -> UIButton.Configuration {
-        var config = UIButton.Configuration.tinted()
-        config.title = title
-        config.image = UIImage(systemName: image)
-        config.imagePadding = 8
-        config.contentInsets = NSDirectionalEdgeInsets(top: 13, leading: 16, bottom: 13, trailing: 16)
-        config.cornerStyle = .medium
-        return config
+        filledConfiguration(title: title, image: image)
     }
 
     private func makeButton(title: String, image: String, action: Selector, color: UIColor = .systemBlue) -> UIButton {
-        let button = UIButton(type: .system)
-        var config = UIButton.Configuration.tinted()
-        config.title = title
+        let usesBlueGradient = color == .systemBlue
+        let button: UIButton = usesBlueGradient ? PersonalVoiceGradientButton(type: .system) : UIButton(type: .system)
+        var config = usesBlueGradient ? UIButton.Configuration.plain() : UIButton.Configuration.tinted()
+        if usesBlueGradient {
+            var attributedTitle = AttributedString(title)
+            attributedTitle.foregroundColor = .white
+            attributedTitle.font = .systemFont(ofSize: 16, weight: .semibold)
+            config.attributedTitle = attributedTitle
+            config.imageColorTransformer = UIConfigurationColorTransformer { _ in .white }
+        } else {
+            config.title = title
+        }
         config.image = UIImage(systemName: image)
         config.imagePadding = 8
-        config.baseForegroundColor = color
+        config.baseForegroundColor = usesBlueGradient ? .white : color
+        if usesBlueGradient {
+            config.background.backgroundColor = .clear
+            config.background.image = PersonalVoiceGradientButton.gradientBackgroundImage
+            config.background.imageContentMode = .scaleToFill
+            config.background.cornerRadius = 15
+        }
         config.contentInsets = NSDirectionalEdgeInsets(top: 13, leading: 16, bottom: 13, trailing: 16)
         config.cornerStyle = .medium
         button.configuration = config
@@ -1259,14 +1653,61 @@ final class PersonalVoicePackViewController: UIViewController, AVAudioRecorderDe
     }
 
     @objc private func playRecording() {
+        if previewPlayer?.isPlaying == true {
+            previewPlayer?.stop()
+            stopReferenceWaveAnimation()
+            return
+        }
         guard FileManager.default.fileExists(atPath: store.referenceAudioURL.path) else {
             showMessage("请先完成录音或上传声音文件。")
             return
         }
         do {
             previewPlayer = try AVAudioPlayer(contentsOf: store.referenceAudioURL)
+            previewPlayer?.delegate = self
             previewPlayer?.play()
-        } catch { showMessage(error.localizedDescription) }
+            startReferenceWaveAnimation()
+        } catch {
+            stopReferenceWaveAnimation()
+            showMessage(error.localizedDescription)
+        }
+    }
+
+    private func startReferenceWaveAnimation() {
+        guard var configuration = referencePreviewButton.configuration else { return }
+        configuration.image = UIImage(systemName: "speaker.wave.2.fill")
+        referencePreviewButton.configuration = configuration
+        referencePreviewButton.layoutIfNeeded()
+
+        let breathe = CAKeyframeAnimation(keyPath: "transform.scale")
+        breathe.values = [1.0, 1.12, 0.96, 1.0]
+        breathe.keyTimes = [0, 0.38, 0.72, 1]
+        breathe.duration = 1.6
+        breathe.repeatCount = .infinity
+        breathe.timingFunctions = [
+            CAMediaTimingFunction(name: .easeInEaseOut),
+            CAMediaTimingFunction(name: .easeInEaseOut),
+            CAMediaTimingFunction(name: .easeInEaseOut)
+        ]
+        referencePreviewButton.imageView?.layer.add(breathe, forKey: "referenceSpeakerBreathe")
+    }
+
+    private func stopReferenceWaveAnimation() {
+        referencePreviewButton.imageView?.layer.removeAllAnimations()
+        referencePreviewButton.imageView?.transform = .identity
+        guard var configuration = referencePreviewButton.configuration else { return }
+        configuration.image = UIImage(systemName: "play.fill")
+        referencePreviewButton.configuration = configuration
+    }
+
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        guard player === previewPlayer else { return }
+        stopReferenceWaveAnimation()
+    }
+
+    func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
+        guard player === previewPlayer else { return }
+        stopReferenceWaveAnimation()
     }
 
     @objc private func selectGeneratedPreview() {
@@ -1558,13 +1999,27 @@ final class PersonalVoicePackListViewController: UIViewController, UITableViewDa
         title.font = .systemFont(ofSize: 20, weight: .semibold)
         title.textAlignment = .center
 
-        let add = UIButton(type: .system)
-        var addConfig = UIButton.Configuration.tinted()
-        addConfig.image = UIImage(systemName: "plus")
-        addConfig.title = "新增"
+        let add = PersonalVoiceGradientButton(type: .system)
+        var addConfig = UIButton.Configuration.plain()
+        addConfig.image = UIImage(
+            systemName: "plus",
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
+        )
+        var addTitle = AttributedString("新增")
+        addTitle.foregroundColor = .white
+        addTitle.font = .systemFont(ofSize: 13, weight: .semibold)
+        addConfig.attributedTitle = addTitle
         addConfig.imagePadding = 4
-        addConfig.contentInsets = NSDirectionalEdgeInsets(top: 9, leading: 10, bottom: 9, trailing: 10)
+        addConfig.baseForegroundColor = .white
+        addConfig.imageColorTransformer = UIConfigurationColorTransformer { _ in .white }
+        addConfig.background.backgroundColor = .clear
+        addConfig.background.image = PersonalVoiceGradientButton.compactGradientBackgroundImage
+        addConfig.background.imageContentMode = .scaleToFill
+        addConfig.background.cornerRadius = 12
+        addConfig.cornerStyle = .medium
+        addConfig.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 8)
         add.configuration = addConfig
+        add.layer.cornerRadius = 12
         add.addTarget(self, action: #selector(addPack), for: .touchUpInside)
 
         [back, title, add].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; view.addSubview($0) }
@@ -1574,6 +2029,7 @@ final class PersonalVoicePackListViewController: UIViewController, UITableViewDa
             back.widthAnchor.constraint(equalToConstant: 42), back.heightAnchor.constraint(equalToConstant: 42),
             title.centerXAnchor.constraint(equalTo: view.centerXAnchor), title.centerYAnchor.constraint(equalTo: back.centerYAnchor),
             add.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12), add.centerYAnchor.constraint(equalTo: back.centerYAnchor),
+            add.heightAnchor.constraint(equalToConstant: 34),
             title.leadingAnchor.constraint(greaterThanOrEqualTo: back.trailingAnchor, constant: 8),
             title.trailingAnchor.constraint(lessThanOrEqualTo: add.leadingAnchor, constant: -8)
         ])

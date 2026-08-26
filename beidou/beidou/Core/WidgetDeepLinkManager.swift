@@ -2,6 +2,9 @@ import Foundation
 
 enum WidgetDestination: String {
     case map
+    case home
+    case work
+    case weather
     case cloud
     case typhoon
     case sunset

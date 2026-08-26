@@ -1,4 +1,5 @@
 import UIKit
+import WidgetKit
 
 /// 新版天气页。旧的 `WeatherViewController` 保留，所有用户入口切换到本页面。
 /// 数据来自 Open-Meteo，无需 API Key。
@@ -83,10 +84,7 @@ final class OpenMeteoWeatherViewController: UIViewController {
 
         let back = roundButton(symbol: "chevron.left")
         back.addTarget(self, action: #selector(goBack), for: .touchUpInside)
-        let refresh = roundButton(symbol: "arrow.clockwise")
-        refresh.addTarget(self, action: #selector(refreshTapped), for: .touchUpInside)
         topBar.addSubview(back)
-        topBar.addSubview(refresh)
 
         cityLabel.font = .systemFont(ofSize: 20, weight: .bold)
         cityLabel.textColor = .white
@@ -153,11 +151,9 @@ final class OpenMeteoWeatherViewController: UIViewController {
             topBar.heightAnchor.constraint(equalToConstant: 54),
             back.leadingAnchor.constraint(equalTo: topBar.leadingAnchor, constant: 18), back.centerYAnchor.constraint(equalTo: topBar.centerYAnchor),
             back.widthAnchor.constraint(equalToConstant: 42), back.heightAnchor.constraint(equalToConstant: 42),
-            refresh.trailingAnchor.constraint(equalTo: topBar.trailingAnchor, constant: -18), refresh.centerYAnchor.constraint(equalTo: topBar.centerYAnchor),
-            refresh.widthAnchor.constraint(equalToConstant: 42), refresh.heightAnchor.constraint(equalToConstant: 42),
             titleStack.centerXAnchor.constraint(equalTo: topBar.centerXAnchor), titleStack.centerYAnchor.constraint(equalTo: topBar.centerYAnchor),
             titleStack.leadingAnchor.constraint(greaterThanOrEqualTo: back.trailingAnchor, constant: 10),
-            titleStack.trailingAnchor.constraint(lessThanOrEqualTo: refresh.leadingAnchor, constant: -10),
+            titleStack.trailingAnchor.constraint(lessThanOrEqualTo: topBar.trailingAnchor, constant: -18),
 
             scrollView.topAnchor.constraint(equalTo: topBar.bottomAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor), scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -422,6 +418,7 @@ final class OpenMeteoWeatherViewController: UIViewController {
         cityLabel.text = activeLocation?.city.nonEmpty ?? cache.city.nonEmpty ?? "当地天气"
         addressLabel.text = activeLocation?.address.nonEmpty ?? cache.address.nonEmpty ?? "Open-Meteo 实时预报"
         render(cache.forecast)
+        saveWeatherWidgetSnapshot(cache.forecast, location: activeLocation ?? Self.beijingFallback)
     }
 
     private func saveCache(_ forecast: OpenMeteoForecast, location: CurrentLocation) {
@@ -432,6 +429,21 @@ final class OpenMeteoWeatherViewController: UIViewController {
         if let data = try? JSONEncoder().encode(cache) {
             UserDefaults.standard.set(data, forKey: Self.cacheKey)
         }
+        saveWeatherWidgetSnapshot(forecast, location: location)
+    }
+
+    private func saveWeatherWidgetSnapshot(_ forecast: OpenMeteoForecast, location: CurrentLocation) {
+        let current = forecast.current
+        let snapshot = WeatherWidgetSnapshot(
+            savedAt: Date(), city: location.city,
+            address: location.address.isEmpty ? location.city : location.address,
+            temperature: Int(current.temperature.rounded()),
+            weatherCode: current.weatherCode, isDay: current.isDay == 1
+        )
+        guard let defaults = UserDefaults(suiteName: WeatherWidgetSnapshot.appGroupID),
+              let data = try? JSONEncoder().encode(snapshot) else { return }
+        defaults.set(data, forKey: WeatherWidgetSnapshot.key)
+        WidgetCenter.shared.reloadTimelines(ofKind: "RealtimeWeatherWidget")
     }
 
     private func parseDate(_ string: String, timezone: String) -> Date? {
@@ -453,6 +465,18 @@ private struct OpenMeteoWeatherCache: Codable {
     let city: String
     let address: String
     let forecast: OpenMeteoForecast
+}
+
+private struct WeatherWidgetSnapshot: Codable {
+    static let appGroupID = "group.cn.navibeidou.beidou"
+    static let key = "weather_widget_snapshot_v1"
+
+    let savedAt: Date
+    let city: String
+    let address: String
+    let temperature: Int
+    let weatherCode: Int
+    let isDay: Bool
 }
 
 private struct OpenMeteoForecast: Codable {
@@ -485,7 +509,8 @@ private struct WeatherCondition {
         case 71...77: title = "降雪"; symbol = "cloud.snow.fill"; tint = .white; isRainy = true
         case 80...82: title = "阵雨"; symbol = "cloud.heavyrain.fill"; tint = .white; isRainy = true
         case 85, 86: title = "阵雪"; symbol = "cloud.snow.fill"; tint = .white; isRainy = true
-        case 95...99: title = "雷雨"; symbol = "cloud.bolt.rain.fill"; tint = .systemYellow; isRainy = true
+        case 95...96: title = "雷雨"; symbol = "cloud.bolt.rain.fill"; tint = UIColor(red: 0.34, green: 0.42, blue: 0.78, alpha: 1); isRainy = true
+        case 97...99: title = "强雷雨"; symbol = "cloud.bolt.rain.fill"; tint = UIColor(red: 0.28, green: 0.32, blue: 0.68, alpha: 1); isRainy = true
         default: title = "天气变化"; symbol = "cloud.fill"; tint = .white; isRainy = false
         }
     }

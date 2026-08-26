@@ -22,11 +22,13 @@ private struct NaviWidgetProvider: TimelineProvider {
 }
 
 private enum NaviWidgetFeature {
-    case map, cloud, typhoon, sunset, earthquake, moon
+    case map, home, work, cloud, typhoon, sunset, earthquake, moon
 
     var title: String {
         switch self {
         case .map: return "卫星导航地图"
+        case .home: return "回家"
+        case .work: return "去公司"
         case .cloud: return "720云"
         case .typhoon: return "台风监测"
         case .sunset: return "火烧云"
@@ -38,6 +40,8 @@ private enum NaviWidgetFeature {
     var subtitle: String {
         switch self {
         case .map: return "定位 · 路线 · 实时导航"
+        case .home: return "一键驾车导航回家"
+        case .work: return "一键驾车导航去公司"
         case .cloud: return "沉浸式探索云端全景"
         case .typhoon: return "追踪路径与实时动态"
         case .sunset: return "查看今天的晚霞概率"
@@ -49,6 +53,8 @@ private enum NaviWidgetFeature {
     var icon: String {
         switch self {
         case .map: return "location.north.fill"
+        case .home: return "house.fill"
+        case .work: return "briefcase.fill"
         case .cloud: return "view.3d"
         case .typhoon: return "tropicalstorm"
         case .sunset: return "sunset.fill"
@@ -60,6 +66,8 @@ private enum NaviWidgetFeature {
     var route: String {
         switch self {
         case .map: return "map"
+        case .home: return "home"
+        case .work: return "work"
         case .cloud: return "cloud"
         case .typhoon: return "typhoon"
         case .sunset: return "sunset"
@@ -71,6 +79,8 @@ private enum NaviWidgetFeature {
     var colors: [Color] {
         switch self {
         case .map: return [Color(red: 0.06, green: 0.34, blue: 0.86), Color(red: 0.08, green: 0.72, blue: 0.88)]
+        case .home: return [Color(red: 0.96, green: 0.42, blue: 0.16), Color(red: 1.00, green: 0.68, blue: 0.18)]
+        case .work: return [Color(red: 0.06, green: 0.35, blue: 0.84), Color(red: 0.10, green: 0.64, blue: 0.94)]
         case .cloud: return [Color(red: 0.08, green: 0.48, blue: 0.93), Color(red: 0.16, green: 0.78, blue: 0.73)]
         case .typhoon: return [Color(red: 0.24, green: 0.26, blue: 0.90), Color(red: 0.55, green: 0.30, blue: 0.91)]
         case .sunset: return [Color(red: 0.98, green: 0.28, blue: 0.30), Color(red: 1.00, green: 0.68, blue: 0.18)]
@@ -224,6 +234,16 @@ private enum MapWidgetDescriptor: NaviWidgetDescriptor {
     static let feature = NaviWidgetFeature.map
 }
 
+private enum HomeWidgetDescriptor: NaviWidgetDescriptor {
+    static let kind = "NavigateHomeWidget"
+    static let feature = NaviWidgetFeature.home
+}
+
+private enum WorkWidgetDescriptor: NaviWidgetDescriptor {
+    static let kind = "NavigateWorkWidget"
+    static let feature = NaviWidgetFeature.work
+}
+
 private enum CloudWidgetDescriptor: NaviWidgetDescriptor {
     static let kind = "CloudPanoramaWidget"
     static let feature = NaviWidgetFeature.cloud
@@ -261,6 +281,189 @@ private struct NaviFeatureWidget<Descriptor: NaviWidgetDescriptor>: Widget {
     }
 }
 
+private struct WeatherWidgetSnapshot: Codable {
+    let savedAt: Date
+    let city: String
+    let address: String
+    let temperature: Int
+    let weatherCode: Int
+    let isDay: Bool
+}
+
+private struct WeatherWidgetEntry: TimelineEntry {
+    let date: Date
+    let snapshot: WeatherWidgetSnapshot?
+}
+
+private struct WeatherWidgetProvider: TimelineProvider {
+    private static let appGroupID = "group.cn.navibeidou.beidou"
+    private static let snapshotKey = "weather_widget_snapshot_v1"
+
+    func placeholder(in context: Context) -> WeatherWidgetEntry {
+        WeatherWidgetEntry(date: Date(), snapshot: sampleSnapshot)
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (WeatherWidgetEntry) -> Void) {
+        completion(WeatherWidgetEntry(date: Date(), snapshot: context.isPreview ? sampleSnapshot : loadSnapshot()))
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<WeatherWidgetEntry>) -> Void) {
+        let entry = WeatherWidgetEntry(date: Date(), snapshot: loadSnapshot())
+        let nextUpdate = Date().addingTimeInterval(30 * 60)
+        completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
+    }
+
+    private func loadSnapshot() -> WeatherWidgetSnapshot? {
+        guard let defaults = UserDefaults(suiteName: Self.appGroupID),
+              let data = defaults.data(forKey: Self.snapshotKey) else { return nil }
+        return try? JSONDecoder().decode(WeatherWidgetSnapshot.self, from: data)
+    }
+
+    private var sampleSnapshot: WeatherWidgetSnapshot {
+        WeatherWidgetSnapshot(
+            savedAt: Date(), city: "北京市", address: "北京市东城区",
+            temperature: 26, weatherCode: 1, isDay: true
+        )
+    }
+}
+
+private struct WeatherWidgetVisual {
+    let title: String
+    let symbol: String
+    let colors: [Color]
+
+    init(code: Int, isDay: Bool) {
+        let daytime = [Color(red: 0.08, green: 0.36, blue: 0.72), Color(red: 0.26, green: 0.67, blue: 0.90)]
+        let nighttime = [Color(red: 0.04, green: 0.08, blue: 0.22), Color(red: 0.18, green: 0.28, blue: 0.50)]
+        let rainy = [Color(red: 0.14, green: 0.25, blue: 0.36), Color(red: 0.36, green: 0.51, blue: 0.62)]
+
+        switch code {
+        case 0:
+            title = "晴朗"; symbol = isDay ? "sun.max.fill" : "moon.stars.fill"; colors = isDay ? daytime : nighttime
+        case 1, 2:
+            title = "少云"; symbol = isDay ? "cloud.sun.fill" : "cloud.moon.fill"; colors = isDay ? daytime : nighttime
+        case 3:
+            title = "阴天"; symbol = "cloud.fill"; colors = isDay ? daytime : nighttime
+        case 45, 48:
+            title = "有雾"; symbol = "cloud.fog.fill"; colors = rainy
+        case 51...57:
+            title = "毛毛雨"; symbol = "cloud.drizzle.fill"; colors = rainy
+        case 61...67:
+            title = "降雨"; symbol = "cloud.rain.fill"; colors = rainy
+        case 71...77, 85, 86:
+            title = "降雪"; symbol = "cloud.snow.fill"; colors = rainy
+        case 80...82:
+            title = "阵雨"; symbol = "cloud.heavyrain.fill"; colors = rainy
+        case 95...99:
+            title = "雷雨"; symbol = "cloud.bolt.rain.fill"; colors = rainy
+        default:
+            title = "天气变化"; symbol = "cloud.fill"; colors = isDay ? daytime : nighttime
+        }
+    }
+}
+
+private struct RealtimeWeatherWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    let entry: WeatherWidgetEntry
+
+    var body: some View {
+        let visual = WeatherWidgetVisual(
+            code: entry.snapshot?.weatherCode ?? 1,
+            isDay: entry.snapshot?.isDay ?? true
+        )
+        ZStack {
+            LinearGradient(colors: visual.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+            Circle()
+                .fill(.white.opacity(0.10))
+                .frame(width: family == .systemSmall ? 120 : 180)
+                .offset(x: family == .systemSmall ? 68 : 145, y: -55)
+            if family == .systemSmall {
+                smallContent(visual: visual)
+            } else {
+                mediumContent(visual: visual)
+            }
+        }
+        .widgetURL(URL(string: "beidounavi://open/weather"))
+        .modifier(WidgetContainerBackground(colors: visual.colors))
+    }
+
+    private func smallContent(visual: WeatherWidgetVisual) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 5) {
+                Image(systemName: "location.fill").font(.caption2)
+                Text(cityText).font(.caption.weight(.semibold)).lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            Spacer(minLength: 2)
+            HStack(alignment: .center, spacing: 8) {
+                Image(systemName: visual.symbol)
+                    .font(.system(size: 30, weight: .medium))
+                    .symbolRenderingMode(.multicolor)
+                Text(temperatureText)
+                    .font(.system(size: 35, weight: .light, design: .rounded))
+            }
+            Text(entry.snapshot == nil ? "打开天气页获取当地天气" : visual.title)
+                .font(.caption.weight(.semibold))
+            Text(addressText)
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.76))
+                .lineLimit(2)
+        }
+        .foregroundStyle(.white)
+        .padding(15)
+    }
+
+    private func mediumContent(visual: WeatherWidgetVisual) -> some View {
+        HStack(spacing: 18) {
+            VStack(spacing: 7) {
+                Image(systemName: visual.symbol)
+                    .font(.system(size: 44, weight: .medium))
+                    .symbolRenderingMode(.multicolor)
+                Text(visual.title).font(.caption.weight(.semibold))
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(temperatureText)
+                    .font(.system(size: 44, weight: .light, design: .rounded))
+                Text(cityText).font(.headline).lineLimit(1)
+                Label(addressText, systemImage: "location.fill")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.78))
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(.white)
+        .padding(18)
+    }
+
+    private var temperatureText: String {
+        entry.snapshot.map { "\($0.temperature)°" } ?? "--°"
+    }
+
+    private var cityText: String {
+        guard let city = entry.snapshot?.city, !city.isEmpty else { return "实时天气" }
+        return city
+    }
+
+    private var addressText: String {
+        guard let address = entry.snapshot?.address, !address.isEmpty else { return "等待应用同步位置" }
+        return address
+    }
+}
+
+private struct RealtimeWeatherWidget: Widget {
+    let kind = "RealtimeWeatherWidget"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: WeatherWidgetProvider()) { entry in
+            RealtimeWeatherWidgetView(entry: entry)
+        }
+        .configurationDisplayName("实时天气")
+        .description("显示天气页面当前地点的气温、地址和天气状况。")
+        .supportedFamilies([.systemSmall, .systemMedium])
+    }
+}
+
 private struct WidgetContainerBackground: ViewModifier {
     let colors: [Color]
 
@@ -280,6 +483,9 @@ private struct WidgetContainerBackground: ViewModifier {
 struct NaviWidgetsBundle: WidgetBundle {
     var body: some Widget {
         NaviFeatureWidget<MapWidgetDescriptor>()
+        NaviFeatureWidget<HomeWidgetDescriptor>()
+        NaviFeatureWidget<WorkWidgetDescriptor>()
+        RealtimeWeatherWidget()
         NaviFeatureWidget<CloudWidgetDescriptor>()
         NaviFeatureWidget<TyphoonWidgetDescriptor>()
         NaviFeatureWidget<SunsetWidgetDescriptor>()
