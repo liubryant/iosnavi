@@ -123,6 +123,8 @@ final class NaviViewController: UIViewController {
     private let brandOverlayView = UIView()
     private let brandNameLabel = UILabel()
     private var hasStartedNavigation = false
+    private var isExitingNavigation = false
+    private var preservesClosingSpeechOnDeinit = false
     private var nightModeRefreshTimer: Timer?
 
     #if canImport(AMapNaviKit)
@@ -191,7 +193,9 @@ final class NaviViewController: UIViewController {
             AMapNaviRideManager.sharedInstance().delegate = nil
         }
         #endif
-        TTSController.shared.stop()
+        if !preservesClosingSpeechOnDeinit {
+            TTSController.shared.stop()
+        }
     }
 
     // MARK: - 导航视图 (对应 Android AmapNaviView)
@@ -453,19 +457,29 @@ final class NaviViewController: UIViewController {
     // MARK: - 退出导航 (对应 Android onNaviCancel -> finish())
 
     @objc private func tapClose() {
+        guard !isExitingNavigation else { return }
         let shouldPlayDriveEnd = mode == .drive || mode == .truck
+        isExitingNavigation = true
+        preservesClosingSpeechOnDeinit = shouldPlayDriveEnd
         NavigationRuntimeState.shared.clearNavigating()
+        // 先清空当前转向播报，并阻断 stopNavi 产生的“退出导航”短提示。
+        TTSController.shared.stop()
         #if canImport(AMapNaviKit)
         switch mode {
         case .drive, .truck:
-            AMapNaviDriveManager.sharedInstance().stopNavi()
+            let manager = AMapNaviDriveManager.sharedInstance()
+            manager.delegate = nil
+            manager.stopNavi()
         case .walk:
-            AMapNaviWalkManager.sharedInstance().stopNavi()
+            let manager = AMapNaviWalkManager.sharedInstance()
+            manager.delegate = nil
+            manager.stopNavi()
         case .ride:
-            AMapNaviRideManager.sharedInstance().stopNavi()
+            let manager = AMapNaviRideManager.sharedInstance()
+            manager.delegate = nil
+            manager.stopNavi()
         }
         #endif
-        TTSController.shared.stop()
 
         if let nav = navigationController, nav.viewControllers.first !== self {
             nav.popViewController(animated: true)
@@ -473,8 +487,8 @@ final class NaviViewController: UIViewController {
             dismiss(animated: true)
         }
         if shouldPlayDriveEnd {
-            // 等退出动画基本完成再播放完整收尾语，避免切页时声音被打断。
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            // 等退出动画基本完成再播放；deinit 不再停止这段独立收尾语。
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 TTSController.shared.speakDriveClosing()
             }
         }
@@ -565,9 +579,12 @@ final class NaviViewController: UIViewController {
     private func showNavigationVoiceSettings() {
         let tts = TTSController.shared
         let voices = tts.availableChineseVoices
+        let personalVoicePacks = tts.availablePersonalVoicePacks
         let alert = UIAlertController(
             title: "播报声音",
-            message: voices.isEmpty ? "\n当前设备没有可用的中文系统语音" : "\n选择导航语音角色，已下载的系统声音会显示在这里",
+            message: voices.isEmpty
+                ? "\n当前设备没有可用的中文系统语音"
+                : "\n选择导航语音角色，个人语音包显示在系统声音下方",
             preferredStyle: .actionSheet
         )
 
@@ -583,6 +600,22 @@ final class NaviViewController: UIViewController {
                 tts.selectVoice(identifier: voice.identifier)
                 tts.speak("已切换为\(voice.name)，祝您一路平安。")
             })
+        }
+
+        if !personalVoicePacks.isEmpty {
+            let section = UIAlertAction(title: "— 个人语音包 —", style: .default)
+            section.isEnabled = false
+            alert.addAction(section)
+
+            personalVoicePacks.forEach { pack in
+                let prefix = pack.id == tts.currentPersonalVoicePackID ? "✓ " : ""
+                alert.addAction(UIAlertAction(title: "\(prefix)\(pack.name)", style: .default) { _ in
+                    guard tts.selectPersonalVoicePack(id: pack.id) else { return }
+                    if let phrase = PersonalVoicePackStore.shared.generatedPhrases(for: pack.id).first {
+                        tts.speakDrive(phrase.text)
+                    }
+                })
+            }
         }
 
         alert.addAction(UIAlertAction(title: L10n.t("common.cancel"), style: .cancel))
@@ -622,6 +655,7 @@ final class NaviViewController: UIViewController {
     }
 
     fileprivate func speakNaviText(_ text: String, usesPersonalVoice: Bool = false) {
+        guard !isExitingNavigation else { return }
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else { return }
         // The navigation SDK may send service/quota errors through the same
@@ -629,23 +663,27 @@ final class NaviViewController: UIViewController {
         // and must not be shown or spoken as navigation guidance.
         guard !isRouteServiceFailureMessage(trimmedText) else { return }
 
+        // 驾车导航允许在导航过程中即时切换系统声音与个人语音包。
+        // SDK 回调标记只表示该导航类型支持个人语音，实际是否启用以当前语音包为准。
+        let shouldUsePersonalVoice = usesPersonalVoice && TTSController.shared.isUsingPersonalVoice
+
         switch NaviBroadcastMode.current {
         case .muted:
             TTSController.shared.stop()
         case .detailed:
-            usesPersonalVoice ? TTSController.shared.speakDrive(trimmedText) : TTSController.shared.speak(trimmedText)
+            shouldUsePersonalVoice ? TTSController.shared.speakDrive(trimmedText) : TTSController.shared.speak(trimmedText)
         case .standard:
             guard !isLowPriorityBroadcast(trimmedText) else {
-                if usesPersonalVoice { TTSController.shared.collectDriveVoiceForCache(trimmedText) }
+                if shouldUsePersonalVoice { TTSController.shared.collectDriveVoiceForCache(trimmedText) }
                 return
             }
-            usesPersonalVoice ? TTSController.shared.speakDrive(trimmedText) : TTSController.shared.speak(trimmedText)
+            shouldUsePersonalVoice ? TTSController.shared.speakDrive(trimmedText) : TTSController.shared.speak(trimmedText)
         case .concise:
             guard isKeyBroadcast(trimmedText) else {
-                if usesPersonalVoice { TTSController.shared.collectDriveVoiceForCache(trimmedText) }
+                if shouldUsePersonalVoice { TTSController.shared.collectDriveVoiceForCache(trimmedText) }
                 return
             }
-            usesPersonalVoice ? TTSController.shared.speakDrive(trimmedText) : TTSController.shared.speak(trimmedText)
+            shouldUsePersonalVoice ? TTSController.shared.speakDrive(trimmedText) : TTSController.shared.speak(trimmedText)
         }
     }
 

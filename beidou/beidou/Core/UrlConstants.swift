@@ -44,4 +44,8 @@ enum UrlConstants {
 
     /// 知潮潮汐移动网页。
     static let todayTide = "https://www.zhichaoo.cn/"
+
+    /// Anitabi 社区维护的动画圣地巡礼地图镜像。开源客户端同样将此节点
+    /// 作为主站不可用时的官方数据镜像，内容与 ww.anitabi.cn 保持同步。
+    static let anitabiMap = "https://w.junreimap.com/map"
 }

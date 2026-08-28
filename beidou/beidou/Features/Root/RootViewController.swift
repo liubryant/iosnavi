@@ -23,6 +23,9 @@ final class RootViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .white
+        // 尽早应用本地会员状态，确保会员冷启动不会请求开屏广告。
+        // 联网刷新放在用户同意隐私协议之后进行。
+        _ = NaviAccountSession.shared
         observeAppLifecycle()
     }
 
@@ -60,11 +63,19 @@ final class RootViewController: UIViewController {
 
     private func initializeSDKsAndShowSplash() {
         PrivacyCompliance.agreeAll()
+        NaviIAPBootstrap.startObservingTransactions()
+        NaviAccountSession.shared.refreshMembershipSilently()
         UMengAnalytics.shared.initialize()
 
         requestTrackingAuthorizationIfNeeded { [weak self] in
             guard let self else { return }
             self.didStartSplashFlow = false
+
+            // 会员无需等待广告 SDK 初始化，立即展示仅包含 App 图标的品牌启动页。
+            if Constants.isCloseSplashAd {
+                self.showSplashIfNeeded()
+            }
+
             PangleAdManager.shared.initialize { _ in
                 DispatchQueue.main.async {
                     self.showSplashIfNeeded()
@@ -145,6 +156,12 @@ final class RootViewController: UIViewController {
         handlePendingShortcutIfPossible()
         handlePendingCloudPanoramaNotificationIfPossible()
 
+        // 去广告用户从后台返回时同样不触发热启动开屏广告。
+        guard !Constants.shouldCloseSplashAd else {
+            backgroundEnteredAt = nil
+            return
+        }
+
         guard SpUtil.bool(.agreementAccepted),
               let backgroundEnteredAt,
               Date().timeIntervalSince(backgroundEnteredAt) >= hotSplashMinimumBackgroundInterval,
@@ -211,6 +228,11 @@ final class RootViewController: UIViewController {
     }
 
     private func showHotSplash() {
+        guard !Constants.shouldCloseSplashAd else {
+            isShowingHotSplash = false
+            return
+        }
+
         isShowingHotSplash = true
         PangleSplashAdManager.shared.resetSplashRequestState()
         PangleSplashAdManager.shared.onClose = { [weak self] in
@@ -225,6 +247,12 @@ final class RootViewController: UIViewController {
     }
 
     private func loadHotSplashAd() {
+        guard !Constants.shouldCloseSplashAd else {
+            PangleSplashAdManager.shared.cancelSplashAd()
+            isShowingHotSplash = false
+            return
+        }
+
         PangleSplashAdManager.shared.loadAndShowDefaultSplashAd { [weak self] success, _ in
             if !success {
                 self?.isShowingHotSplash = false
@@ -379,6 +407,17 @@ final class RootViewController: UIViewController {
         if viewControllers.isEmpty {
             viewControllers = navigationController.viewControllers
         }
+
+        if item.requiresVIP && !NaviAccountSession.shared.isVipActive {
+            let listController = CloudPanoramaListViewController()
+            viewControllers.append(listController)
+            navigationController.setViewControllers(viewControllers, animated: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak listController] in
+                listController?.presentVIPUpgradePrompt(for: item)
+            }
+            return
+        }
+
         viewControllers.append(CloudPanoramaWebViewController(title: item.title, url: item.url))
         navigationController.setViewControllers(viewControllers, animated: true)
     }

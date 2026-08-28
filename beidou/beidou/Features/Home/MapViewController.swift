@@ -10,6 +10,7 @@
 
 import UIKit
 import CoreLocation
+import SwiftUI
 
 #if canImport(BaiduMapAPI_Map)
 import BaiduMapAPI_Map
@@ -50,6 +51,7 @@ final class MapViewController: UIViewController {
     private let bottomSheetWeatherBadge = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
     private let bottomSheetWeatherIconView = UIImageView()
     private let bottomSheetTemperatureLabel = UILabel()
+    private let mapScaleBarView = MapScaleBarView()
     private let bottomSheetHistoryStack = UIStackView()
     private let bottomSheetShortcutStack = UIStackView()
     private let bottomSheetSecondaryShortcutStack = UIStackView()
@@ -69,11 +71,23 @@ final class MapViewController: UIViewController {
     private var currentHeading: CLLocationDirection = 0
     private var isMapRenderingActive = false
     private var mapResumeWorkItem: DispatchWorkItem?
+    private let automaticLocationFollowInterval: TimeInterval = 15
+    private var automaticLocationFollowTimer: Timer?
+    private var mapInteractionGeneration = 0
+    private var isAutomaticLocationRequestInFlight = false
 
     #if canImport(BaiduMapAPI_Map)
     private var currentLocationAnnotation: BMKPointAnnotation?
     private weak var currentLocationAnnotationView: HeadingLocationAnnotationView?
+    private var selectedParkingAnnotation: BMKPointAnnotation?
+    private var selectedParkingPlace: ParkingMapPlace?
+    private lazy var parkingMarkerImage = Self.makeParkingMarkerImage()
     #endif
+
+    private struct ParkingMapPlace {
+        let name: String
+        let coordinate: CLLocationCoordinate2D
+    }
 
     init(sideMenuViewController: SideMenuViewController) {
         self.sideMenuVC = sideMenuViewController
@@ -99,7 +113,7 @@ final class MapViewController: UIViewController {
         setupHeadingUpdates()
         observeApplicationLifecycle()
 
-        applyMapType(.satellite)
+        applyMapType(restoredMapType())
         refreshLocation(shouldCenterMap: true)
     }
 
@@ -114,12 +128,14 @@ final class MapViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         refreshLocationWhenPageAppears()
+        scheduleAutomaticLocationFollow()
         scheduleCloudPanoramaWelcomeIfNeeded()
         ReviewPromptManager.requestSystemReviewIfEligibleAfterCloudScenes(in: self)
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        updateMapScaleBar()
         guard !isDraggingBottomSheet else { return }
         bottomSheetHeightConstraint?.constant = isBottomSheetExpanded ? bottomSheetExpandedHeight : bottomSheetCollapsedHeight
     }
@@ -128,12 +144,14 @@ final class MapViewController: UIViewController {
         super.viewWillDisappear(animated)
         cloudWelcomeWorkItem?.cancel()
         cloudWelcomeWorkItem = nil
+        stopAutomaticLocationFollow()
         stopMapRenderingIfNeeded()
         UMengAnalytics.shared.pageEnd("MapViewController")
     }
 
     deinit {
         mapResumeWorkItem?.cancel()
+        automaticLocationFollowTimer?.invalidate()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -157,6 +175,7 @@ final class MapViewController: UIViewController {
         // Metal 渲染任务，会触发 BackgroundExecutionNotPermitted，甚至崩溃。
         mapResumeWorkItem?.cancel()
         mapResumeWorkItem = nil
+        stopAutomaticLocationFollow()
         stopMapRenderingIfNeeded()
     }
 
@@ -169,6 +188,7 @@ final class MapViewController: UIViewController {
             self.startMapRenderingIfNeeded()
             self.mapView.setNeedsLayout()
             self.mapView.layoutIfNeeded()
+            self.scheduleAutomaticLocationFollow()
         }
         mapResumeWorkItem = workItem
         // 等系统文件选择器/前后台转场彻底结束后再恢复 Metal 地图，避免白屏。
@@ -255,7 +275,11 @@ final class MapViewController: UIViewController {
     }
 
     private func randomCloudPanoramaWelcomeItem() -> CloudScenicItem? {
-        let items = CloudScenicItem.all
+        // 非会员的首页推荐只展示可直接观看的前 12 个免费景区，
+        // 避免欢迎弹窗成为绕过 VIP 景区权限的入口。
+        let items = NaviAccountSession.shared.isVipActive
+            ? CloudScenicItem.all
+            : Array(CloudScenicItem.all.prefix(CloudScenicItem.freeScenicCount))
         guard !items.isEmpty else { return nil }
 
         let lastID = SpUtil.string(.lastCloudPanoramaWelcomeID)
@@ -303,6 +327,8 @@ final class MapViewController: UIViewController {
     /// 切换地图类型: 卫星图 / 普通图 / 路况图 (对应侧边栏地图类型选择)
     private func applyMapType(_ type: MapDisplayType) {
         currentMapType = type
+        SpUtil.setString(type.rawValue, for: .mapType)
+        SpUtil.setBool(type == .traffic, for: .trafficEnabled)
         #if canImport(BaiduMapAPI_Map)
         switch type {
         case .satellite:
@@ -320,6 +346,15 @@ final class MapViewController: UIViewController {
         sideMenuVC.highlightMapType(type)
     }
 
+    private func restoredMapType() -> MapDisplayType {
+        let savedValue = SpUtil.string(.mapType)
+        if let savedType = MapDisplayType(rawValue: savedValue) {
+            return savedType
+        }
+        // 兼容曾单独保存路况开关的旧版本；首次安装仍保持原来的卫星图默认值。
+        return SpUtil.bool(.trafficEnabled) ? .traffic : .satellite
+    }
+
     // MARK: - 顶部搜索栏 + 抽屉按钮
 
     private func setupTopBar() {
@@ -327,13 +362,15 @@ final class MapViewController: UIViewController {
         menuButton.setImage(UIImage(systemName: "line.3.horizontal"), for: .normal)
         menuButton.tintColor = .label
         menuButton.backgroundColor = .systemBackground
-        menuButton.layer.cornerRadius = 22
+        menuButton.layer.cornerRadius = 11
+        menuButton.layer.cornerCurve = .continuous
         applyShadow(to: menuButton)
         menuButton.translatesAutoresizingMaskIntoConstraints = false
         menuButton.addTarget(self, action: #selector(tapMenu), for: .touchUpInside)
 
         searchBar.backgroundColor = .systemBackground
-        searchBar.layer.cornerRadius = 22
+        searchBar.layer.cornerRadius = 11
+        searchBar.layer.cornerCurve = .continuous
         applyShadow(to: searchBar)
         searchBar.translatesAutoresizingMaskIntoConstraints = false
         searchBar.isUserInteractionEnabled = true
@@ -391,7 +428,8 @@ final class MapViewController: UIViewController {
         configuration.title = L10n.t("home.cloud_panorama")
         configuration.image = UIImage(systemName: "photo")
         configuration.imagePadding = 4
-        configuration.cornerStyle = .capsule
+        configuration.cornerStyle = .fixed
+        configuration.background.cornerRadius = 11
         configuration.baseBackgroundColor = .systemBackground
         configuration.baseForegroundColor = UIColor.label.withAlphaComponent(0.78)
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8)
@@ -402,7 +440,7 @@ final class MapViewController: UIViewController {
             return outgoing
         }
         cloudPanoramaButton.configuration = configuration
-        cloudPanoramaButton.layer.cornerRadius = 22
+        cloudPanoramaButton.layer.cornerRadius = 11
         cloudPanoramaButton.layer.cornerCurve = .continuous
         cloudPanoramaButton.layer.masksToBounds = false
         applyShadow(to: cloudPanoramaButton)
@@ -432,9 +470,11 @@ final class MapViewController: UIViewController {
         ])
     }
 
-    // MARK: - 左侧悬浮按钮: 全景 / 世界景点全景 / 地铁 / 指南针(北)
+    // MARK: - 左侧悬浮按钮: 圣地巡礼 / 全景 / 世界景点全景 / 地铁 / 指南针(北)
 
     private func setupLeftButtons() {
+        let anitabiButton = makeFloatingAssetButton(imageName: "AnitabiPilgrimageIcon", action: #selector(tapAnitabi))
+        anitabiButton.accessibilityLabel = L10n.t("anitabi.map_title")
         let panoramaButton = makeFloatingButton(icon: "view.3d", action: #selector(tapPanorama))
         let worldPanoramaButton = makeFloatingButton(icon: "globe.europe.africa.fill", action: #selector(tapWorldPanorama))
         let metroButton = makeFloatingButton(icon: "tram", action: #selector(tapMetro))
@@ -442,7 +482,7 @@ final class MapViewController: UIViewController {
         styleFloatingButton(northButton)
         northButton.addTarget(self, action: #selector(tapNorth), for: .touchUpInside)
 
-        let stack = UIStackView(arrangedSubviews: [panoramaButton, worldPanoramaButton, metroButton, northButton])
+        let stack = UIStackView(arrangedSubviews: [anitabiButton, panoramaButton, worldPanoramaButton, metroButton, northButton])
         stack.axis = .vertical
         stack.spacing = 14
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -558,6 +598,7 @@ final class MapViewController: UIViewController {
         bottomSheetAppIconContainer.addSubview(bottomSheetAppIconView)
         bottomSheetWeatherBadge.contentView.addSubview(bottomSheetWeatherIconView)
         bottomSheetWeatherBadge.contentView.addSubview(bottomSheetTemperatureLabel)
+        mapScaleBarView.translatesAutoresizingMaskIntoConstraints = false
 
         bottomSheetHistoryStack.axis = .vertical
         bottomSheetHistoryStack.spacing = 0
@@ -641,6 +682,7 @@ final class MapViewController: UIViewController {
         bottomSearchSheet.addSubview(bottomSheetBlurView)
         bottomSearchSheet.addSubview(bottomSheetMaterialOverlay)
         bottomSearchSheet.addSubview(bottomSheetWeatherBadge)
+        bottomSearchSheet.addSubview(mapScaleBarView)
         bottomSearchSheet.addSubview(bottomSheetGrabber)
         bottomSearchSheet.addSubview(bottomSheetSearchRow)
         bottomSearchSheet.addSubview(bottomSheetAppIconContainer)
@@ -670,6 +712,11 @@ final class MapViewController: UIViewController {
             bottomSheetWeatherBadge.bottomAnchor.constraint(equalTo: bottomSearchSheet.topAnchor, constant: -8),
             bottomSheetWeatherBadge.heightAnchor.constraint(equalToConstant: 32),
             bottomSheetWeatherBadge.widthAnchor.constraint(equalToConstant: 82),
+
+            mapScaleBarView.leadingAnchor.constraint(equalTo: bottomSearchSheet.leadingAnchor, constant: 12),
+            mapScaleBarView.bottomAnchor.constraint(equalTo: bottomSearchSheet.topAnchor, constant: -8),
+            mapScaleBarView.widthAnchor.constraint(equalToConstant: 112),
+            mapScaleBarView.heightAnchor.constraint(equalToConstant: 32),
 
             bottomSheetWeatherIconView.leadingAnchor.constraint(equalTo: bottomSheetWeatherBadge.contentView.leadingAnchor, constant: 10),
             bottomSheetWeatherIconView.centerYAnchor.constraint(equalTo: bottomSheetWeatherBadge.contentView.centerYAnchor),
@@ -727,6 +774,47 @@ final class MapViewController: UIViewController {
         reloadBottomSheetHistory()
         applyCachedBottomSheetWeather()
         updateBottomSearchSheet(animated: false)
+        DispatchQueue.main.async { [weak self] in self?.updateMapScaleBar() }
+    }
+
+    /// 以地图中心横向 96pt 对应的真实地表距离计算动态比例尺。
+    /// 拖动或缩放地图结束后重新取坐标，比例尺长度和标注会同步变化。
+    private func updateMapScaleBar() {
+        #if canImport(BaiduMapAPI_Map)
+        guard mapView.bounds.width > 0, mapView.bounds.height > 0 else { return }
+        let maximumWidth: CGFloat = 96
+        let centerY = mapView.bounds.midY
+        let startPoint = CGPoint(x: mapView.bounds.midX - maximumWidth / 2, y: centerY)
+        let endPoint = CGPoint(x: mapView.bounds.midX + maximumWidth / 2, y: centerY)
+        let startCoordinate = mapView.convert(startPoint, toCoordinateFrom: mapView)
+        let endCoordinate = mapView.convert(endPoint, toCoordinateFrom: mapView)
+        let maximumDistance = CLLocation(
+            latitude: startCoordinate.latitude,
+            longitude: startCoordinate.longitude
+        ).distance(from: CLLocation(
+            latitude: endCoordinate.latitude,
+            longitude: endCoordinate.longitude
+        ))
+        guard maximumDistance.isFinite, maximumDistance > 0 else { return }
+
+        let distance = niceScaleDistance(notExceeding: maximumDistance)
+        let lineWidth = maximumWidth * CGFloat(distance / maximumDistance)
+        mapScaleBarView.update(distanceMeters: distance, lineWidth: lineWidth)
+        #endif
+    }
+
+    private func niceScaleDistance(notExceeding distance: CLLocationDistance) -> CLLocationDistance {
+        let magnitude = pow(10.0, floor(log10(distance)))
+        let normalized = distance / magnitude
+        let step: Double
+        if normalized >= 5 {
+            step = 5
+        } else if normalized >= 2 {
+            step = 2
+        } else {
+            step = 1
+        }
+        return step * magnitude
     }
 
     private var bottomSheetCollapsedHeight: CGFloat {
@@ -875,6 +963,18 @@ final class MapViewController: UIViewController {
         return button
     }
 
+    private func makeFloatingAssetButton(imageName: String, action: Selector) -> UIButton {
+        let button = UIButton(type: .custom)
+        let image = UIImage(named: imageName)?.withRenderingMode(.alwaysOriginal)
+        button.setImage(image, for: .normal)
+        button.imageView?.contentMode = .scaleAspectFill
+        styleFloatingButton(button)
+        button.layer.borderWidth = 1
+        button.layer.borderColor = UIColor.white.withAlphaComponent(0.9).cgColor
+        button.addTarget(self, action: action, for: .touchUpInside)
+        return button
+    }
+
     private func styleFloatingButton(_ button: UIButton) {
         button.tintColor = .label
         button.backgroundColor = .systemBackground
@@ -957,6 +1057,72 @@ final class MapViewController: UIViewController {
             // 从导航等二级页面返回时重新获取当前位置，更新首页定位标记。
             refreshLocation(shouldCenterMap: false, useCachedLocation: false)
         }
+    }
+
+    /// 首页连续一段时间没有地图交互时，使用最新定位重新居中。
+    /// 这里只更新 centerCoordinate，保留用户当前选择的 zoomLevel。
+    private func scheduleAutomaticLocationFollow() {
+        automaticLocationFollowTimer?.invalidate()
+        automaticLocationFollowTimer = nil
+
+        guard viewIfLoaded?.window != nil,
+              UIApplication.shared.applicationState == .active else { return }
+
+        let timer = Timer(timeInterval: automaticLocationFollowInterval, repeats: false) { [weak self] _ in
+            self?.performAutomaticLocationFollow()
+        }
+        automaticLocationFollowTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func stopAutomaticLocationFollow() {
+        automaticLocationFollowTimer?.invalidate()
+        automaticLocationFollowTimer = nil
+    }
+
+    private func recordMapUserInteraction() {
+        mapInteractionGeneration += 1
+        scheduleAutomaticLocationFollow()
+    }
+
+    private func performAutomaticLocationFollow() {
+        automaticLocationFollowTimer = nil
+
+        guard viewIfLoaded?.window != nil,
+              UIApplication.shared.applicationState == .active,
+              sideMenuContainer?.isMenuOpen != true,
+              presentedViewController == nil else {
+            scheduleAutomaticLocationFollow()
+            return
+        }
+
+        let interactionGeneration = mapInteractionGeneration
+        guard !isAutomaticLocationRequestInFlight else {
+            scheduleAutomaticLocationFollow()
+            return
+        }
+
+        isAutomaticLocationRequestInFlight = true
+        LocationManager.shared.requestAuthorization()
+        LocationManager.shared.requestLocation { [weak self] location in
+            guard let self else { return }
+            self.isAutomaticLocationRequestInFlight = false
+
+            if let location {
+                let shouldCenter = self.mapInteractionGeneration == interactionGeneration
+                self.updateCurrentLocation(
+                    location,
+                    shouldCenterMap: shouldCenter,
+                    forceCenter: shouldCenter
+                )
+                if shouldCenter {
+                    self.userDidMoveMap = false
+                }
+            }
+        }
+
+        // 无交互时继续按 15 秒周期刷新；任何新的交互都会重置这个计时器。
+        scheduleAutomaticLocationFollow()
     }
 
     private func updateCurrentLocation(_ location: CurrentLocation, shouldCenterMap: Bool, forceCenter: Bool = false) {
@@ -1125,6 +1291,122 @@ final class MapViewController: UIViewController {
         #endif
     }
 
+    #if canImport(BaiduMapAPI_Map)
+    private func isParkingMapPOI(_ mapPoi: BMKMapPoi) -> Bool {
+        let name = (mapPoi.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let lowercaseName = name.lowercased()
+        let parkingKeywords = ["停车", "车库", "泊车", "parking", "car park"]
+        if parkingKeywords.contains(where: lowercaseName.contains) {
+            return true
+        }
+        return lowercaseName == "p"
+            || lowercaseName.range(of: #"^p\s*\d+$"#, options: .regularExpression) != nil
+            || lowercaseName.range(of: #"^p\s*[a-z]$"#, options: .regularExpression) != nil
+    }
+
+    private func selectParkingMapPOI(_ mapPoi: BMKMapPoi) {
+        let trimmedName = mapPoi.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let place = ParkingMapPlace(
+            name: trimmedName.isEmpty ? L10n.t("parking.default_name") : trimmedName,
+            coordinate: mapPoi.pt
+        )
+        selectedParkingPlace = place
+
+        if let annotation = selectedParkingAnnotation {
+            annotation.coordinate = place.coordinate
+            annotation.title = place.name
+        } else {
+            let annotation = BMKPointAnnotation()
+            annotation.coordinate = place.coordinate
+            annotation.title = place.name
+            selectedParkingAnnotation = annotation
+            mapView.addAnnotation(annotation)
+        }
+
+        presentParkingPlace(place)
+    }
+
+    private func presentParkingPlace(_ place: ParkingMapPlace) {
+        guard presentedViewController == nil else { return }
+
+        let message = String(
+            format: L10n.t("parking.location_format"),
+            place.name,
+            place.coordinate.latitude,
+            place.coordinate.longitude
+        )
+        let alert = UIAlertController(
+            title: L10n.t("parking.popup_title"),
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: L10n.t("parking.navigate"), style: .default) { [weak self] _ in
+            guard let self else { return }
+            let gcj02 = CoordinateConverter.bd09ToGCJ02(place.coordinate)
+            let destination = SelectedPOI(
+                name: place.name,
+                address: place.name,
+                latitude: gcj02.latitude,
+                longitude: gcj02.longitude
+            )
+            self.navigationController?.pushViewController(
+                RoutePlanViewController(startLocation: self.currentLocation, destinationPOI: destination),
+                animated: true
+            )
+        })
+        alert.addAction(UIAlertAction(title: L10n.t("common.close"), style: .cancel))
+        present(alert, animated: true)
+    }
+
+    private static func makeParkingMarkerImage() -> UIImage {
+        let size = CGSize(width: 40, height: 46)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { context in
+            let graphics = context.cgContext
+            graphics.setShadow(
+                offset: CGSize(width: 0, height: 2),
+                blur: 4,
+                color: UIColor.black.withAlphaComponent(0.24).cgColor
+            )
+
+            let markerPath = UIBezierPath()
+            markerPath.move(to: CGPoint(x: 20, y: 45))
+            markerPath.addCurve(
+                to: CGPoint(x: 4, y: 18),
+                controlPoint1: CGPoint(x: 15, y: 39),
+                controlPoint2: CGPoint(x: 4, y: 30)
+            )
+            markerPath.addArc(
+                withCenter: CGPoint(x: 20, y: 18),
+                radius: 16,
+                startAngle: .pi,
+                endAngle: 0,
+                clockwise: true
+            )
+            markerPath.addCurve(
+                to: CGPoint(x: 20, y: 45),
+                controlPoint1: CGPoint(x: 36, y: 30),
+                controlPoint2: CGPoint(x: 25, y: 39)
+            )
+            markerPath.close()
+            UIColor.systemBlue.setFill()
+            markerPath.fill()
+
+            graphics.setShadow(offset: .zero, blur: 0, color: nil)
+            let text = "P" as NSString
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 22, weight: .heavy),
+                .foregroundColor: UIColor.white
+            ]
+            let textSize = text.size(withAttributes: attributes)
+            text.draw(
+                at: CGPoint(x: (size.width - textSize.width) / 2, y: 5.5),
+                withAttributes: attributes
+            )
+        }
+    }
+    #endif
+
     private func bd09Coordinate(for location: CurrentLocation) -> CLLocationCoordinate2D {
         CoordinateConverter.gcj02ToBD09(CLLocationCoordinate2D(latitude: location.latitude, longitude: location.longitude))
     }
@@ -1142,6 +1424,7 @@ final class MapViewController: UIViewController {
     // MARK: - 事件
 
     @objc private func tapMenu() {
+        recordMapUserInteraction()
         sideMenuContainer?.toggleMenu()
     }
 
@@ -1150,6 +1433,7 @@ final class MapViewController: UIViewController {
     }
 
     @objc private func tapBottomSearchRow() {
+        recordMapUserInteraction()
         if isBottomSheetExpanded {
             tapSearch()
         } else {
@@ -1172,6 +1456,7 @@ final class MapViewController: UIViewController {
 
         switch gesture.state {
         case .began:
+            recordMapUserInteraction()
             isDraggingBottomSheet = true
         case .changed:
             let baseHeight = isBottomSheetExpanded ? bottomSheetExpandedHeight : bottomSheetCollapsedHeight
@@ -1234,6 +1519,7 @@ final class MapViewController: UIViewController {
     }
 
     @objc private func tapMoreTools(_ sender: UIControl) {
+        recordMapUserInteraction()
         let sheet = UIAlertController(
             title: L10n.t("home.more_tools"),
             message: nil,
@@ -1280,11 +1566,14 @@ final class MapViewController: UIViewController {
     }
 
     @objc private func tapTraffic() {
+        recordMapUserInteraction()
         #if canImport(BaiduMapAPI_Map)
-        let newState = !mapView.isTrafficEnabled
-        mapView.isTrafficEnabled = newState
-        trafficButton.tintColor = newState ? .systemBlue : .label
+        applyMapType(currentMapType == .traffic ? .normal : .traffic)
         #endif
+    }
+
+    @objc private func tapAnitabi() {
+        navigationController?.pushViewController(AnitabiMapViewController(), animated: true)
     }
 
     @objc private func tapPanorama() {
@@ -1304,6 +1593,7 @@ final class MapViewController: UIViewController {
     }
 
     @objc private func tapNorth() {
+        recordMapUserInteraction()
         #if canImport(BaiduMapAPI_Map)
         mapView.rotation = 0
         #endif
@@ -1322,6 +1612,30 @@ final class MapViewController: UIViewController {
 
 extension MapViewController: SideMenuViewControllerDelegate {
 
+    func sideMenuDidSelectAccount(_ menu: SideMenuViewController) {
+        sideMenuContainer?.closeMenu()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            guard let self, self.presentedViewController == nil else { return }
+            let controller = UIHostingController(rootView: NaviLoginView())
+            if NaviAccountSession.shared.isLoggedIn {
+                controller.modalPresentationStyle = .overFullScreen
+                controller.modalTransitionStyle = .crossDissolve
+                controller.view.backgroundColor = .clear
+            } else {
+                controller.modalPresentationStyle = .fullScreen
+            }
+            self.present(controller, animated: true)
+        }
+    }
+
+    func sideMenuDidSelectMembership(_ menu: SideMenuViewController) {
+        sideMenuContainer?.closeMenu()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            guard let self, self.presentedViewController == nil else { return }
+            NaviMembershipPresentation.show(from: self)
+        }
+    }
+
     func sideMenuDidSelectPanorama(_ menu: SideMenuViewController) {
         sideMenuContainer?.closeMenu()
         let coordinate = currentBD09Coordinate()
@@ -1336,59 +1650,13 @@ extension MapViewController: SideMenuViewControllerDelegate {
         navigationController?.pushViewController(OpenMeteoWeatherViewController(location: currentLocation), animated: true)
     }
 
-    func sideMenuDidSelectServiceAgreement(_ menu: SideMenuViewController) {
+    func sideMenuDidSelectAbout(_ menu: SideMenuViewController) {
         sideMenuContainer?.closeMenu()
-        navigationController?.pushViewController(
-            WebViewController(title: L10n.t("legal.service_agreement"), content: .localText(resourceName: "user_agreement")),
-            animated: true
-        )
-    }
-
-    func sideMenuDidSelectPrivacyPolicy(_ menu: SideMenuViewController) {
-        sideMenuContainer?.closeMenu()
-        navigationController?.pushViewController(
-            WebViewController(title: L10n.t("legal.privacy_policy"), content: .remoteURL(Constants.privacyPolicyURL)),
-            animated: true
-        )
-    }
-
-    func sideMenuDidSelectFeedback(_ menu: SideMenuViewController) {
-        sideMenuContainer?.closeMenu()
-        navigationController?.pushViewController(FeedbackViewController(), animated: true)
-    }
-
-    func sideMenuDidSelectRating(_ menu: SideMenuViewController) {
-        sideMenuContainer?.closeMenu()
-        ReviewPromptManager.openAppStoreReviewPage()
-    }
-
-    func sideMenuDidSelectClearCache(_ menu: SideMenuViewController) {
-        sideMenuContainer?.closeMenu()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            self?.presentClearCacheConfirmation()
-        }
-    }
-
-    private func presentClearCacheConfirmation() {
-        let size = AppCacheManager.formattedApproximateSize
-        let alert = UIAlertController(
-            title: L10n.t("cache.confirm_title"),
-            message: String(format: L10n.t("cache.confirm_message"), size),
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: L10n.t("common.cancel"), style: .cancel))
-        alert.addAction(UIAlertAction(title: L10n.t("cache.clear_action"), style: .destructive) { [weak self] _ in
-            AppCacheManager.clear { [weak self] in
-                guard let self else { return }
-                let result = UIAlertController(title: nil, message: L10n.t("cache.success"), preferredStyle: .alert)
-                result.addAction(UIAlertAction(title: L10n.t("common.ok"), style: .default))
-                self.present(result, animated: true)
-            }
-        })
-        present(alert, animated: true)
+        navigationController?.pushViewController(AboutUsViewController(), animated: true)
     }
 
     func sideMenu(_ menu: SideMenuViewController, didSelectMapType type: MapDisplayType) {
+        recordMapUserInteraction()
         applyMapType(type)
         sideMenuContainer?.closeMenu()
     }
@@ -1401,14 +1669,51 @@ extension MapViewController: BMKMapViewDelegate {
     func mapView(_ mapView: BMKMapView, regionWillChangeAnimated animated: Bool, reason: BMKRegionChangeReason) {
         if reason == BMKRegionChangeReasonGesture {
             userDidMoveMap = true
+            recordMapUserInteraction()
         }
     }
 
     func mapView(_ mapView: BMKMapView, regionDidChangeAnimated animated: Bool, reason: BMKRegionChangeReason) {
+        if reason == BMKRegionChangeReasonGesture {
+            recordMapUserInteraction()
+        }
         updateLocationHeading(animated: animated)
+        updateMapScaleBar()
+    }
+
+    func mapView(_ mapView: BMKMapView, onClickedMapBlank coordinate: CLLocationCoordinate2D) {
+        recordMapUserInteraction()
+    }
+
+    func mapView(_ mapView: BMKMapView, onClickedMapPoi mapPoi: BMKMapPoi) {
+        recordMapUserInteraction()
+        guard isParkingMapPOI(mapPoi) else { return }
+        selectParkingMapPOI(mapPoi)
+    }
+
+    func mapView(_ mapView: BMKMapView, didSelect view: BMKAnnotationView) {
+        recordMapUserInteraction()
+        guard let selectedParkingAnnotation,
+              view.annotation as AnyObject === selectedParkingAnnotation,
+              let selectedParkingPlace else { return }
+        mapView.deselectAnnotation(selectedParkingAnnotation, animated: false)
+        presentParkingPlace(selectedParkingPlace)
     }
 
     func mapView(_ mapView: BMKMapView, viewFor annotation: BMKAnnotation) -> BMKAnnotationView? {
+        if let selectedParkingAnnotation,
+           annotation as AnyObject === selectedParkingAnnotation {
+            let identifier = "selectedParkingPlace"
+            let reusableView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
+                ?? BMKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+            guard let annotationView = reusableView else { return nil }
+            annotationView.annotation = annotation
+            annotationView.image = parkingMarkerImage
+            annotationView.centerOffset = CGPoint(x: 0, y: -23)
+            annotationView.canShowCallout = false
+            return annotationView
+        }
+
         guard let currentLocationAnnotation,
               annotation as AnyObject === currentLocationAnnotation else {
             return nil
@@ -1542,6 +1847,76 @@ extension MapViewController: CLLocationManagerDelegate {
 
     func locationManagerShouldDisplayHeadingCalibration(_ manager: CLLocationManager) -> Bool {
         false
+    }
+}
+
+/// 首页地图白色比例尺。两端竖线与横线的屏幕长度对应标签中的实际地表距离。
+private final class MapScaleBarView: UIView {
+    private let distanceLabel = UILabel()
+    private let scaleLayer = CAShapeLayer()
+    private var currentLineWidth: CGFloat = 96
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        backgroundColor = .clear
+
+        distanceLabel.textColor = .white
+        distanceLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+        distanceLabel.textAlignment = .center
+        distanceLabel.layer.shadowColor = UIColor.black.cgColor
+        distanceLabel.layer.shadowOpacity = 0.9
+        distanceLabel.layer.shadowRadius = 2
+        distanceLabel.layer.shadowOffset = .zero
+        addSubview(distanceLabel)
+
+        scaleLayer.strokeColor = UIColor.white.cgColor
+        scaleLayer.fillColor = UIColor.clear.cgColor
+        scaleLayer.lineWidth = 2
+        scaleLayer.lineCap = .square
+        scaleLayer.shadowColor = UIColor.black.cgColor
+        scaleLayer.shadowOpacity = 0.85
+        scaleLayer.shadowRadius = 1.5
+        scaleLayer.shadowOffset = .zero
+        layer.addSublayer(scaleLayer)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func update(distanceMeters: CLLocationDistance, lineWidth: CGFloat) {
+        distanceLabel.text = Self.distanceText(distanceMeters)
+        let width = min(96, max(24, lineWidth))
+        currentLineWidth = width
+        let originX: CGFloat = 0
+        let baselineY = bounds.height - 4
+        let path = UIBezierPath()
+        path.move(to: CGPoint(x: originX, y: baselineY - 6))
+        path.addLine(to: CGPoint(x: originX, y: baselineY))
+        path.addLine(to: CGPoint(x: originX + width, y: baselineY))
+        path.addLine(to: CGPoint(x: originX + width, y: baselineY - 6))
+        scaleLayer.path = path.cgPath
+        setNeedsLayout()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        distanceLabel.frame = CGRect(x: 0, y: 0, width: currentLineWidth, height: 18)
+    }
+
+    private static func distanceText(_ meters: CLLocationDistance) -> String {
+        if meters >= 1_000 {
+            let kilometers = meters / 1_000
+            return kilometers.rounded() == kilometers
+                ? String(format: "%.0f km", kilometers)
+                : String(format: "%.1f km", kilometers)
+        }
+        if meters >= 1 {
+            return String(format: "%.0f m", meters)
+        }
+        return String(format: "%.1f m", meters)
     }
 }
 

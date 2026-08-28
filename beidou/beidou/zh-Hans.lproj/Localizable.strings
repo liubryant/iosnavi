@@ -23,6 +23,11 @@
 "home.search_placeholder" = "请输入终点";
 "home.search_here" = "在此处搜索";
 "home.cloud_panorama" = "720云";
+"home.anitabi_short" = "巡礼";
+"anitabi.map_title" = "动漫足迹地图";
+"anitabi.load_failed" = "动漫足迹地图加载失败，请检查网络后重试";
+"anitabi.retry" = "重新加载";
+"anitabi.attribution" = "数据来源于 Anitabi";
 "home.sunset_glow" = "火烧云";
 "home.earthquake_report" = "地震速报";
 "home.moon_phase" = "月相查询";
@@ -44,8 +49,21 @@
 "home.altitude_value_format" = "%.1f 米";
 
 "menu.panorama" = "全景/街景";
+"menu.account" = "登录账号";
+"menu.account_login_hint" = "登录后同步账号与会员权益";
+"menu.account_logged_in" = "账号已登录";
+"menu.membership" = "VIP会员";
+"menu.membership_hint" = "畅游720景区 · 专属语音 · 免开屏";
+"menu.membership_active" = "VIP会员已开通";
+"menu.membership_expires" = "有效期至 %@";
 "menu.weather" = "天气查询";
+"menu.about_us" = "关于我们";
+"about.version_format" = "版本 %@";
+"about.tagline" = "卫星导航地图 · 探索世界，安心出发";
+"about.copyright_format" = "Copyright © %d All Rights Reserved";
 "menu.service_agreement" = "服务协议";
+"menu.vip_agreement" = "会员服务协议";
+"menu.auto_renew_agreement" = "自动续费服务协议";
 "menu.privacy_policy" = "隐私政策";
 "menu.feedback" = "用户反馈";
 "menu.rating" = "应用评分";
@@ -79,6 +97,19 @@
 "search.input_destination_hint" = "输入终点名称或地址";
 "search.no_results" = "暂无搜索结果";
 "search.history" = "历史记录";
+"search.voice_start" = "语音搜索";
+"search.voice_stop" = "停止语音输入";
+"search.voice_hint" = "说出目的地名称或地址";
+"search.voice_listening" = "正在聆听，请说出目的地名称或地址…";
+"search.voice_unavailable_title" = "语音搜索暂不可用";
+"search.voice_unavailable_message" = "当前设备暂时无法使用语音识别，请稍后重试。";
+"search.voice_microphone_unavailable" = "未检测到可用的麦克风。";
+"search.voice_permission_title" = "需要语音与麦克风权限";
+"search.voice_permission_message" = "请在系统设置中允许语音识别和麦克风权限，才能通过语音搜索目的地。";
+"search.open_settings" = "前往设置";
+"search.voice_failed_title" = "未能识别语音";
+"search.voice_failed_message" = "请检查网络连接后重试，或直接输入目的地。";
+"search.voice_no_speech" = "没有听清目的地，请重新点击麦克风后再说一次。";
 
 "around.title" = "周边";
 "around.placeholder" = "搜索周边 (餐饮/酒店/加油站...)";
@@ -185,6 +216,11 @@
 "world.category.northwest" = "西北";
 "world.category.northeast" = "东北";
 "world.scenic_summary" = "国内热门景区，可查看景区入口、道路与周边百度全景。";
+
+"parking.default_name" = "停车场";
+"parking.popup_title" = "停车场位置";
+"parking.location_format" = "%@\n纬度：%.6f\n经度：%.6f";
+"parking.navigate" = "导航前往";
 
 "navi.drive" = "驾车导航";
 "navi.walk" = "步行导航";

@@ -55,6 +55,10 @@ enum Constants {
     static var city = "北京"
     /// 是否关闭广告 (后端下发覆盖)
     static var isCloseAd = false
+    /// 是否仅关闭开屏广告。会员状态同步后设置此值，不影响其他广告类型。
+    static var isCloseSplashAd = false
+    /// 全局关闭广告或会员仅关闭开屏广告时，均跳过开屏广告。
+    static var shouldCloseSplashAd: Bool { isCloseAd || isCloseSplashAd }
     /// 是否启用页面内模板广告。进入页面后延迟加载，避免页面切换动画期间触发 GroMore 视图崩溃。
     static var isInlineTemplateAdEnabled = true
     /// 信息流/插屏广告定时加载次数

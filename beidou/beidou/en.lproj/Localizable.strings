@@ -23,6 +23,11 @@
 "home.search_placeholder" = "Enter destination";
 "home.search_here" = "Search Here";
 "home.cloud_panorama" = "720 Cloud";
+"home.anitabi_short" = "Anime";
+"anitabi.map_title" = "Anime Location Map";
+"anitabi.load_failed" = "Unable to load the anime location map. Check your connection and try again.";
+"anitabi.retry" = "Reload";
+"anitabi.attribution" = "Data provided by Anitabi";
 "home.sunset_glow" = "Sunset";
 "home.earthquake_report" = "Earthquakes";
 "home.moon_phase" = "Moon Phases";
@@ -44,8 +49,21 @@
 "home.altitude_value_format" = "%.1f m";
 
 "menu.panorama" = "Panorama / Street View";
+"menu.account" = "Sign In";
+"menu.account_login_hint" = "Sync account and membership";
+"menu.account_logged_in" = "Signed in";
+"menu.membership" = "VIP Membership";
+"menu.membership_hint" = "720° scenes · VIP voices · No splash ads";
+"menu.membership_active" = "VIP Active";
+"menu.membership_expires" = "Expires %@";
 "menu.weather" = "Weather";
+"menu.about_us" = "About Us";
+"about.version_format" = "Version %@";
+"about.tagline" = "Satellite Navigation Map · Explore with confidence";
+"about.copyright_format" = "Copyright © %d All Rights Reserved";
 "menu.service_agreement" = "Service Agreement";
+"menu.vip_agreement" = "Membership Service Agreement";
+"menu.auto_renew_agreement" = "Auto-Renewal Service Agreement";
 "menu.privacy_policy" = "Privacy Policy";
 "menu.feedback" = "Feedback";
 "menu.rating" = "Rate App";
@@ -79,6 +97,19 @@
 "search.input_destination_hint" = "Enter a destination name or address";
 "search.no_results" = "No results";
 "search.history" = "History";
+"search.voice_start" = "Voice search";
+"search.voice_stop" = "Stop voice input";
+"search.voice_hint" = "Say a destination name or address";
+"search.voice_listening" = "Listening — say a destination name or address…";
+"search.voice_unavailable_title" = "Voice Search Unavailable";
+"search.voice_unavailable_message" = "Speech recognition is temporarily unavailable on this device. Please try again later.";
+"search.voice_microphone_unavailable" = "No available microphone was detected.";
+"search.voice_permission_title" = "Speech and Microphone Access Required";
+"search.voice_permission_message" = "Allow Speech Recognition and Microphone access in Settings to search destinations by voice.";
+"search.open_settings" = "Open Settings";
+"search.voice_failed_title" = "Speech Not Recognized";
+"search.voice_failed_message" = "Check your network connection and try again, or enter the destination manually.";
+"search.voice_no_speech" = "No destination was recognized. Tap the microphone and try again.";
 
 "around.title" = "Nearby";
 "around.placeholder" = "Search nearby (food/hotel/gas...)";
@@ -186,6 +217,11 @@
 "world.category.northwest" = "Northwest";
 "world.category.northeast" = "Northeast";
 "world.scenic_summary" = "Popular scenic area. View entrances, roads, and nearby Baidu panoramas.";
+
+"parking.default_name" = "Parking";
+"parking.popup_title" = "Parking Location";
+"parking.location_format" = "%@\nLatitude: %.6f\nLongitude: %.6f";
+"parking.navigate" = "Navigate";
 
 "navi.drive" = "Driving Navigation";
 "navi.walk" = "Walking Navigation";

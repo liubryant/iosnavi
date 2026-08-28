@@ -7,10 +7,44 @@ struct PersonalVoicePhrase: Codable, Hashable {
     let id: String
     let text: String
 
-    static let driveCatalog: [PersonalVoicePhrase] = [
-        .init(id: "start", text: "开始导航"),
-        .init(id: "navigation_end", text: "导航结束"),
-        .init(id: "arrived", text: "您已到达目的地"),
+    private static var isVIPMember: Bool {
+        UserDefaults.standard.bool(forKey: "vip_active")
+    }
+
+    static var navigationOpeningPhrase: PersonalVoicePhrase {
+        isVIPMember
+            ? .init(id: "vip_start_v1", text: "尊敬的VIP会员，导航已开始，请注意行车安全，祝您一路顺风。")
+            : .init(id: "start", text: "开始导航")
+    }
+
+    static var navigationClosingPhrase: PersonalVoicePhrase {
+        isVIPMember
+            ? .init(id: "vip_navigation_end_v1", text: "尊敬的VIP会员，本次导航已结束，感谢您的使用，请确认车辆已经安全停稳。")
+            : .init(id: "navigation_end", text: "导航结束")
+    }
+
+    static var closingAnnouncement: String {
+        isVIPMember
+            ? navigationClosingPhrase.text
+            : "导航结束，感谢您的使用，请确认车辆已经安全停稳。"
+    }
+
+    static func personalizedPlaybackText(_ text: String) -> String {
+        guard isVIPMember,
+              isOpeningInstruction(text),
+              !text.contains("尊敬的VIP会员") else { return text }
+        return navigationOpeningPhrase.text + text
+    }
+
+    static func isOpeningInstruction(_ text: String) -> Bool {
+        text.contains("准备出发") || text.contains("开始导航") || text.contains("导航已开始")
+    }
+
+    static var driveCatalog: [PersonalVoicePhrase] {
+        [
+            navigationOpeningPhrase,
+            navigationClosingPhrase,
+            .init(id: "arrived", text: "您已到达目的地"),
         .init(id: "rerouting", text: "路线重新规划"),
         .init(id: "straight", text: "请保持直行"),
         .init(id: "turn_left", text: "前方左转"),
@@ -40,8 +74,9 @@ struct PersonalVoicePhrase: Codable, Hashable {
         .init(id: "500_ramp", text: "前方500米进入匝道"),
         .init(id: "100_exit", text: "前方100米驶出匝道"),
         .init(id: "300_exit", text: "前方300米驶出匝道"),
-        .init(id: "500_exit", text: "前方500米驶出匝道")
-    ]
+            .init(id: "500_exit", text: "前方500米驶出匝道")
+        ]
+    }
 }
 
 struct DynamicPersonalVoiceEntry: Codable, Hashable {
@@ -104,8 +139,11 @@ final class PersonalVoicePackStore {
     var isEnabled: Bool {
         get { selectedPackID != nil && activePackID == selectedPackID }
         set {
-            if newValue { activePackID = selectedPackID }
-            else if activePackID == selectedPackID { activePackID = nil }
+            if newValue, let selectedPackID {
+                activatePack(selectedPackID)
+            } else if activePackID == selectedPackID {
+                activatePack(nil)
+            }
         }
     }
 
@@ -152,9 +190,16 @@ final class PersonalVoicePackStore {
     }
 
     func activatePack(_ id: String?) {
-        guard let id else { activePackID = nil; return }
+        guard let id else {
+            activePackID = nil
+            if NavigationVoicePreference.selectionKind == .personalPack {
+                NavigationVoicePreference.selectionKind = .automatic
+            }
+            return
+        }
         guard packs().contains(where: { $0.id == id }), generatedCount(for: id) > 0 else { return }
         activePackID = id
+        NavigationVoicePreference.selectionKind = .personalPack
     }
 
     var packDirectory: URL {
@@ -235,7 +280,14 @@ final class PersonalVoicePackStore {
 
         // 高德首次播报通常是“准备出发，全程xx米，大约需要xx分钟，右转”。
         // 路程与时间是动态数据，使用本地“开始导航 + 转向动作”代替系统音色朗读整句。
-        if normalized.contains("准备出发") || normalized.contains("开始导航") { append("start") }
+        if PersonalVoicePhrase.isOpeningInstruction(normalized) {
+            let openingID = PersonalVoicePhrase.navigationOpeningPhrase.id
+            guard let openingURL = existingURL(id: openingID, directory: directory) else {
+                // 开场语缺失时整句回退系统 TTS，不能只播后半段转向提示。
+                return []
+            }
+            result.append(openingURL)
+        }
         if normalized.contains("到达目的地") || normalized.contains("您已到达") { append("arrived"); return result }
         if normalized.contains("重新规划") { append("rerouting"); return result }
         if normalized.contains("卫星定位信号弱") { append("gps_weak"); return result }
@@ -476,7 +528,7 @@ final class PersonalVoicePackStore {
         var values = packs()
         values.removeAll { $0.id == id }
         try save(values)
-        if activePackID == id { activePackID = nil }
+        if activePackID == id { activatePack(nil) }
         if selectedPackID == id { selectedPackID = values.first?.id }
     }
 

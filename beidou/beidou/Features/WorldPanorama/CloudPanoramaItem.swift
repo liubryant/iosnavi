@@ -10,6 +10,10 @@ struct CloudScenicItem: Decodable, Hashable {
 
     static let categories = ["全部", "收藏", "海外", "北京", "上海", "深圳", "云南", "山海", "湖泊", "文博", "5A"]
 
+    /// “全部”列表中的前 12 个景区可免费查看，其余景区为 VIP 专享。
+    /// 使用稳定的景区 ID 集合判断，保证搜索、收藏和分类列表中的权限一致。
+    static let freeScenicCount = 12
+
     static let all: [CloudScenicItem] = {
         guard let url = Bundle.main.url(forResource: "cloud_panorama_items", withExtension: "json")
                 ?? Bundle.main.url(forResource: "cloud_panorama_items", withExtension: "json", subdirectory: "Resources"),
@@ -20,6 +24,12 @@ struct CloudScenicItem: Decodable, Hashable {
         }
         return items
     }()
+
+    private static let freeScenicIDs = Set(all.prefix(freeScenicCount).map(\.id))
+
+    var requiresVIP: Bool {
+        !Self.freeScenicIDs.contains(id)
+    }
 
     func matches(_ query: String) -> Bool {
         let value = query.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -16,6 +16,7 @@ final class SplashViewController: UIViewController {
 
     private var didFinish = false
     private var didStartShowingAd = false
+    private let memberBrandingDuration: TimeInterval = 0.8
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -30,6 +31,7 @@ final class SplashViewController: UIViewController {
         iconView.layer.cornerRadius = 24
         iconView.clipsToBounds = true
         iconView.translatesAutoresizingMaskIntoConstraints = false
+
         view.addSubview(iconView)
         NSLayoutConstraint.activate([
             iconView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
@@ -40,6 +42,20 @@ final class SplashViewController: UIViewController {
     }
 
     private func loadSplashAd() {
+        // 会员仍展示品牌启动图标，但不请求或展示开屏广告。
+        if Constants.isCloseSplashAd {
+            DispatchQueue.main.asyncAfter(deadline: .now() + memberBrandingDuration) { [weak self] in
+                self?.finish()
+            }
+            return
+        }
+
+        // 全局关闭广告时不发起开屏广告请求。
+        guard !Constants.shouldCloseSplashAd else {
+            finish()
+            return
+        }
+
         PangleSplashAdManager.shared.onClose = { [weak self] in
             self?.finish()
         }

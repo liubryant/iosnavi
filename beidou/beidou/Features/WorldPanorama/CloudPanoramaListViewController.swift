@@ -1,4 +1,5 @@
 import UIKit
+import SwiftUI
 
 final class CloudPanoramaListViewController: UIViewController {
     private enum Entry: Hashable {
@@ -38,13 +39,20 @@ final class CloudPanoramaListViewController: UIViewController {
         view.backgroundColor = .systemGroupedBackground
         setupHeader()
         setupCollectionView()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(accountStateDidChange),
+            name: .naviAccountStateDidChange,
+            object: nil
+        )
         applyFilter()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         UMengAnalytics.shared.pageBegin("CloudPanoramaListViewController")
-        if selectedCategory == "收藏" { applyFilter() }
+        applyFilter()
+        NaviAccountSession.shared.refreshMembershipSilently()
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -55,6 +63,10 @@ final class CloudPanoramaListViewController: UIViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         UMengAnalytics.shared.pageEnd("CloudPanoramaListViewController")
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -191,6 +203,49 @@ final class CloudPanoramaListViewController: UIViewController {
 
     @objc private func tapBack() { navigationController?.popViewController(animated: true) }
 
+    @objc private func accountStateDidChange() {
+        collectionView.reloadData()
+    }
+
+    /// 供列表点击和通知直达共用，避免通过其他入口绕过 VIP 权限。
+    func presentVIPUpgradePrompt(for item: CloudScenicItem) {
+        guard item.requiresVIP,
+              !NaviAccountSession.shared.isVipActive,
+              presentedViewController == nil else { return }
+
+        weak var promptController: UIViewController?
+        let prompt = CloudVIPUpgradeSheet(
+            scenicTitle: item.title,
+            onUpgrade: { [weak self] in
+                promptController?.dismiss(animated: true) { [weak self] in
+                    guard let self, self.presentedViewController == nil else { return }
+                    NaviMembershipPresentation.show(from: self)
+                }
+            },
+            onCancel: {
+                promptController?.dismiss(animated: true)
+            }
+        )
+        let controller = UIHostingController(rootView: prompt)
+        promptController = controller
+        controller.modalPresentationStyle = .pageSheet
+        if let sheet = controller.sheetPresentationController {
+            if #available(iOS 16.0, *) {
+                let identifier = UISheetPresentationController.Detent.Identifier("cloud.vip.upgrade")
+                sheet.detents = [
+                    .custom(identifier: identifier) { context in
+                        min(390, context.maximumDetentValue)
+                    }
+                ]
+            } else {
+                sheet.detents = [.medium()]
+            }
+            sheet.prefersGrabberVisible = true
+            sheet.preferredCornerRadius = 20
+        }
+        present(controller, animated: true)
+    }
+
     @objc private func tapCategory(_ sender: UIButton) {
         selectedCategory = CloudScenicItem.categories[sender.tag]
         updateCategoryButtons()
@@ -211,7 +266,12 @@ extension CloudPanoramaListViewController: UICollectionViewDataSource, UICollect
         switch entries[indexPath.item] {
         case .scenic(let item):
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: CloudScenicCell.reuseIdentifier, for: indexPath) as! CloudScenicCell
-            cell.configure(item: item, isFavorite: CloudPanoramaFavorites.contains(item.id)) { [weak self] in
+            cell.configure(
+                item: item,
+                isFavorite: CloudPanoramaFavorites.contains(item.id),
+                requiresVIP: item.requiresVIP,
+                isLocked: item.requiresVIP && !NaviAccountSession.shared.isVipActive
+            ) { [weak self] in
                 CloudPanoramaFavorites.toggle(item.id)
                 self?.applyFilter()
             }
@@ -227,6 +287,10 @@ extension CloudPanoramaListViewController: UICollectionViewDataSource, UICollect
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         guard case .scenic(let item) = entries[indexPath.item] else { return }
+        if item.requiresVIP && !NaviAccountSession.shared.isVipActive {
+            presentVIPUpgradePrompt(for: item)
+            return
+        }
         navigationController?.pushViewController(CloudPanoramaWebViewController(title: item.title, url: item.url), animated: true)
     }
 
@@ -253,6 +317,7 @@ extension CloudPanoramaListViewController: UICollectionViewDataSource, UICollect
 private final class CloudScenicCell: UICollectionViewCell {
     static let reuseIdentifier = "CloudScenicCell"
     private let imageView = UIImageView()
+    private let vipBadge = CloudVIPBadgeView()
     private let titleLabel = UILabel()
     private let favoriteButton = UIButton(type: .system)
     private var favoriteAction: (() -> Void)?
@@ -265,6 +330,9 @@ private final class CloudScenicCell: UICollectionViewCell {
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
         imageView.translatesAutoresizingMaskIntoConstraints = false
+        vipBadge.isHidden = true
+        vipBadge.isUserInteractionEnabled = false
+        vipBadge.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.font = .systemFont(ofSize: 14, weight: .semibold)
         titleLabel.textAlignment = .center
         titleLabel.numberOfLines = 2
@@ -274,7 +342,7 @@ private final class CloudScenicCell: UICollectionViewCell {
         favoriteButton.layer.cornerRadius = 16
         favoriteButton.addTarget(self, action: #selector(toggleFavorite), for: .touchUpInside)
         favoriteButton.translatesAutoresizingMaskIntoConstraints = false
-        [imageView, titleLabel, favoriteButton].forEach(contentView.addSubview)
+        [imageView, titleLabel, vipBadge, favoriteButton].forEach(contentView.addSubview)
         NSLayoutConstraint.activate([
             imageView.topAnchor.constraint(equalTo: contentView.topAnchor),
             imageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
@@ -283,6 +351,10 @@ private final class CloudScenicCell: UICollectionViewCell {
             titleLabel.topAnchor.constraint(equalTo: imageView.bottomAnchor, constant: 7),
             titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 6),
             titleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -6),
+            vipBadge.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 7),
+            vipBadge.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 7),
+            vipBadge.widthAnchor.constraint(equalToConstant: 54),
+            vipBadge.heightAnchor.constraint(equalToConstant: 24),
             favoriteButton.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 7),
             favoriteButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -7),
             favoriteButton.widthAnchor.constraint(equalToConstant: 32),
@@ -295,18 +367,171 @@ private final class CloudScenicCell: UICollectionViewCell {
     override func prepareForReuse() {
         super.prepareForReuse()
         imageView.image = nil
+        vipBadge.isHidden = true
         favoriteAction = nil
     }
 
-    func configure(item: CloudScenicItem, isFavorite: Bool, favoriteAction: @escaping () -> Void) {
+    func configure(
+        item: CloudScenicItem,
+        isFavorite: Bool,
+        requiresVIP: Bool,
+        isLocked: Bool,
+        favoriteAction: @escaping () -> Void
+    ) {
         titleLabel.text = item.title
         if let url = item.coverImageURL { imageView.image = UIImage(contentsOfFile: url.path) }
         if imageView.image == nil { imageView.image = UIImage(systemName: "photo.on.rectangle.angled") }
+        vipBadge.isHidden = !requiresVIP
         favoriteButton.setImage(UIImage(systemName: isFavorite ? "heart.fill" : "heart"), for: .normal)
+        isAccessibilityElement = true
+        accessibilityLabel = isLocked ? "\(item.title)，VIP 专享景区" : item.title
+        accessibilityTraits = .button
         self.favoriteAction = favoriteAction
     }
 
     @objc private func toggleFavorite() { favoriteAction?() }
+}
+
+private final class CloudVIPBadgeView: UIView {
+    private let gradientLayer = CAGradientLayer()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        gradientLayer.colors = [
+            UIColor(red: 0.23, green: 0.12, blue: 0.05, alpha: 1).cgColor,
+            UIColor(red: 0.42, green: 0.23, blue: 0.12, alpha: 1).cgColor,
+            UIColor(red: 0.23, green: 0.12, blue: 0.05, alpha: 1).cgColor
+        ]
+        gradientLayer.startPoint = CGPoint(x: 0, y: 0.5)
+        gradientLayer.endPoint = CGPoint(x: 1, y: 0.5)
+        layer.insertSublayer(gradientLayer, at: 0)
+        layer.cornerRadius = 7
+        layer.cornerCurve = .continuous
+        layer.masksToBounds = true
+
+        let icon = UIImageView(image: UIImage(systemName: "crown.fill"))
+        icon.tintColor = UIColor(red: 0.96, green: 0.84, blue: 0.62, alpha: 1)
+        icon.contentMode = .scaleAspectFit
+        icon.translatesAutoresizingMaskIntoConstraints = false
+
+        let label = UILabel()
+        label.text = "VIP"
+        label.font = .systemFont(ofSize: 11, weight: .bold)
+        label.textColor = UIColor(red: 0.96, green: 0.84, blue: 0.62, alpha: 1)
+        label.translatesAutoresizingMaskIntoConstraints = false
+
+        addSubview(icon)
+        addSubview(label)
+        NSLayoutConstraint.activate([
+            icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
+            icon.centerYAnchor.constraint(equalTo: centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 12),
+            icon.heightAnchor.constraint(equalToConstant: 12),
+            label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 4),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -5)
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        gradientLayer.frame = bounds
+    }
+}
+
+/// 与 AgentClaw 额度不足提示保持一致的紧凑会员引导弹窗。
+private struct CloudVIPUpgradeSheet: View {
+    let scenicTitle: String
+    let onUpgrade: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Text("VIP 专享景区")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(Color(red: 0.10, green: 0.10, blue: 0.18))
+
+            Text("“\(scenicTitle)”需要开通会员后观看")
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+
+            benefitRow(
+                icon: "view.3d",
+                title: "720° 全景景区",
+                freeText: "普通用户：前 12 个",
+                vipText: "VIP：全部解锁"
+            )
+            benefitRow(
+                icon: "crown.fill",
+                title: "会员专享体验",
+                freeText: "免费景区畅看",
+                vipText: "专享景区畅看"
+            )
+
+            Button(action: onUpgrade) {
+                Text("立即开通会员")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.40, green: 0.31, blue: 0.96),
+                                Color(red: 0.61, green: 0.48, blue: 1.0)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 4)
+
+            Button("稍后再说", action: onCancel)
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+                .buttonStyle(.plain)
+                .padding(.bottom, 8)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+    }
+
+    private func benefitRow(icon: String, title: String, freeText: String, vipText: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Color(red: 0.40, green: 0.31, blue: 0.96))
+                .frame(width: 34, height: 34)
+                .background(Color.white.opacity(0.86))
+                .clipShape(Circle())
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color(red: 0.10, green: 0.10, blue: 0.18))
+                HStack {
+                    Text(freeText)
+                    Spacer(minLength: 8)
+                    Text(vipText)
+                        .foregroundStyle(Color(red: 0.40, green: 0.31, blue: 0.96))
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Color(red: 0.96, green: 0.95, blue: 1.0))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
 }
 
 private final class CloudDrawAdCell: UICollectionViewCell {

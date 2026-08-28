@@ -57,7 +57,9 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>卫星导航地图需要获取您的位置信息，以便为您提供地图定位、路线规划与导航服务。</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>用于录制您本人或已获授权的声音，并生成仅供个人使用的驾车导航语音包。</string>
+	<string>用于语音搜索目的地，或录制您本人及已获授权的声音并生成个人驾车导航语音包。</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>用于将您说出的目的地名称或地址转换为文字，以便完成地图地址搜索。</string>
 
 	<!-- ITMS-90683: 高德导航SDK(AMapNavi)内部引用了"始终"定位权限相关API，需补充该字符串 -->
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

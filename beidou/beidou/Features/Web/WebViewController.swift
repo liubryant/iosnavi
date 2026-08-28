@@ -53,11 +53,15 @@ final class WebViewController: UIViewController {
     private let fullScreen: Bool
     private let mobileOptimized: Bool
     private let showsFullScreenTitle: Bool
+    private let showsPageHeader: Bool
     private var textView: UITextView?
     private var webView: WKWebView?
     private let backButton = UIButton(type: .system)
     private let fullScreenTitleLabel = UILabel()
     private let statusBarBackgroundView = UIView()
+    private let pageTopBar = UIView()
+    private let pageBackButton = UIButton(type: .system)
+    private let pageTitleLabel = UILabel()
     private var previousNavigationBarHidden = false
 
     init(
@@ -65,12 +69,14 @@ final class WebViewController: UIViewController {
         content: Content,
         fullScreen: Bool = false,
         mobileOptimized: Bool = false,
-        showsFullScreenTitle: Bool = true
+        showsFullScreenTitle: Bool = true,
+        showsPageHeader: Bool = false
     ) {
         self.content = content
         self.fullScreen = fullScreen
         self.mobileOptimized = mobileOptimized
         self.showsFullScreenTitle = showsFullScreenTitle
+        self.showsPageHeader = showsPageHeader
         super.init(nibName: nil, bundle: nil)
         self.title = title
     }
@@ -82,6 +88,10 @@ final class WebViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        if showsPageHeader {
+            overrideUserInterfaceStyle = .light
+            setupPageHeader()
+        }
         view.backgroundColor = fullScreen ? Self.typhoonPageBackgroundColor : .systemBackground
 
         switch content {
@@ -93,6 +103,62 @@ final class WebViewController: UIViewController {
             setupLocalHTML(resourceName: resourceName)
         }
         setupFullScreenEdgeBackGestureIfNeeded()
+    }
+
+    private var contentTopAnchor: NSLayoutYAxisAnchor {
+        showsPageHeader ? pageTopBar.bottomAnchor : view.safeAreaLayoutGuide.topAnchor
+    }
+
+    private func setupPageHeader() {
+        pageTopBar.backgroundColor = .systemBackground
+        pageTopBar.translatesAutoresizingMaskIntoConstraints = false
+
+        var configuration = UIButton.Configuration.filled()
+        configuration.image = UIImage(systemName: "chevron.left")
+        configuration.baseForegroundColor = .white
+        configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.16)
+        configuration.cornerStyle = .capsule
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
+        pageBackButton.configuration = configuration
+        pageBackButton.accessibilityLabel = L10n.t("common.back")
+        pageBackButton.translatesAutoresizingMaskIntoConstraints = false
+        pageBackButton.addTarget(self, action: #selector(tapBack), for: .touchUpInside)
+
+        pageTitleLabel.text = title
+        pageTitleLabel.font = .systemFont(ofSize: 19, weight: .bold)
+        pageTitleLabel.textColor = UIColor(red: 0.10, green: 0.12, blue: 0.17, alpha: 1)
+        pageTitleLabel.textAlignment = .center
+        pageTitleLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        let separator = UIView()
+        separator.backgroundColor = .separator
+        separator.translatesAutoresizingMaskIntoConstraints = false
+
+        view.addSubview(pageTopBar)
+        pageTopBar.addSubview(pageBackButton)
+        pageTopBar.addSubview(pageTitleLabel)
+        pageTopBar.addSubview(separator)
+        NSLayoutConstraint.activate([
+            pageTopBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            pageTopBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            pageTopBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            pageTopBar.heightAnchor.constraint(equalToConstant: 58),
+
+            pageBackButton.leadingAnchor.constraint(equalTo: pageTopBar.leadingAnchor, constant: 12),
+            pageBackButton.centerYAnchor.constraint(equalTo: pageTopBar.centerYAnchor),
+            pageBackButton.widthAnchor.constraint(equalToConstant: 42),
+            pageBackButton.heightAnchor.constraint(equalToConstant: 42),
+
+            pageTitleLabel.centerXAnchor.constraint(equalTo: pageTopBar.centerXAnchor),
+            pageTitleLabel.centerYAnchor.constraint(equalTo: pageTopBar.centerYAnchor),
+            pageTitleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: pageBackButton.trailingAnchor, constant: 8),
+            pageTitleLabel.trailingAnchor.constraint(lessThanOrEqualTo: pageTopBar.trailingAnchor, constant: -60),
+
+            separator.leadingAnchor.constraint(equalTo: pageTopBar.leadingAnchor),
+            separator.trailingAnchor.constraint(equalTo: pageTopBar.trailingAnchor),
+            separator.bottomAnchor.constraint(equalTo: pageTopBar.bottomAnchor),
+            separator.heightAnchor.constraint(equalToConstant: 0.5)
+        ])
     }
 
     override var prefersStatusBarHidden: Bool {
@@ -145,7 +211,7 @@ final class WebViewController: UIViewController {
         textView.text = Self.loadLegalText(resourceName: resourceName)
         view.addSubview(textView)
         NSLayoutConstraint.activate([
-            textView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            textView.topAnchor.constraint(equalTo: contentTopAnchor),
             textView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             textView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             textView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
@@ -188,7 +254,7 @@ final class WebViewController: UIViewController {
             setupFullScreenStatusBarBackground()
         }
         view.addSubview(webView)
-        let topAnchor = view.safeAreaLayoutGuide.topAnchor
+        let topAnchor = contentTopAnchor
         let bottomAnchor = fullScreen ? view.bottomAnchor : view.bottomAnchor
         NSLayoutConstraint.activate([
             webView.topAnchor.constraint(equalTo: topAnchor),
@@ -297,7 +363,7 @@ final class WebViewController: UIViewController {
         webView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(webView)
         NSLayoutConstraint.activate([
-            webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            webView.topAnchor.constraint(equalTo: contentTopAnchor),
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             webView.bottomAnchor.constraint(equalTo: view.bottomAnchor)

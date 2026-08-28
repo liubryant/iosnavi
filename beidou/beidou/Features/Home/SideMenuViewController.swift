@@ -4,27 +4,25 @@
 //  Author: Liuzheng <bryant_liu24@126.com>
 //
 //  侧边栏内容。对应 Android left_menu.xml:
-//  头部(图标+名称+版本) / 全景 / 天气 / 服务协议 / 隐私政策 / 用户反馈 /
+//  头部(图标+名称+版本) / 全景 / 天气 / 关于我们 /
 //  地图类型(卫星图/普通图/路况图) / 当前位置 / Banner广告位
 //
 
 import UIKit
 
 /// 主页地图展示类型，对应 Android AMap.MAP_TYPE_SATELLITE / NORMAL / BUS
-enum MapDisplayType {
+enum MapDisplayType: String {
     case satellite
     case normal
     case traffic
 }
 
 protocol SideMenuViewControllerDelegate: AnyObject {
+    func sideMenuDidSelectAccount(_ menu: SideMenuViewController)
+    func sideMenuDidSelectMembership(_ menu: SideMenuViewController)
     func sideMenuDidSelectPanorama(_ menu: SideMenuViewController)
     func sideMenuDidSelectWeather(_ menu: SideMenuViewController)
-    func sideMenuDidSelectServiceAgreement(_ menu: SideMenuViewController)
-    func sideMenuDidSelectPrivacyPolicy(_ menu: SideMenuViewController)
-    func sideMenuDidSelectFeedback(_ menu: SideMenuViewController)
-    func sideMenuDidSelectRating(_ menu: SideMenuViewController)
-    func sideMenuDidSelectClearCache(_ menu: SideMenuViewController)
+    func sideMenuDidSelectAbout(_ menu: SideMenuViewController)
     func sideMenu(_ menu: SideMenuViewController, didSelectMapType type: MapDisplayType)
 }
 
@@ -37,6 +35,10 @@ final class SideMenuViewController: UIViewController {
 
     private let currentLocationLabel = UILabel()
     private var mapTypeIcons: [MapDisplayType: UIImageView] = [:]
+    private let accountTitleLabel = UILabel()
+    private let accountSubtitleLabel = UILabel()
+    private let membershipTitleLabel = UILabel()
+    private let membershipSubtitleLabel = UILabel()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -48,6 +50,13 @@ final class SideMenuViewController: UIViewController {
         view.layer.cornerCurve = .continuous
         view.layer.maskedCorners = [.layerMaxXMinYCorner, .layerMaxXMaxYCorner]
         view.layer.masksToBounds = true
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(accountStateDidChange),
+            name: .naviAccountStateDidChange,
+            object: nil
+        )
 
         let scrollView = UIScrollView()
         scrollView.translatesAutoresizingMaskIntoConstraints = false
@@ -73,19 +82,14 @@ final class SideMenuViewController: UIViewController {
         ])
 
         stack.addArrangedSubview(buildHeader())
+        stack.addArrangedSubview(buildAccountEntry())
+        stack.addArrangedSubview(buildMembershipEntry())
+        stack.addArrangedSubview(buildSpacer(height: 8))
         stack.addArrangedSubview(buildRow(icon: "view.3d", title: L10n.t("menu.panorama"), action: #selector(tapPanorama)))
         stack.addArrangedSubview(buildDivider())
         stack.addArrangedSubview(buildRow(icon: "cloud.sun", title: L10n.t("menu.weather"), action: #selector(tapWeather)))
         stack.addArrangedSubview(buildDivider())
-        stack.addArrangedSubview(buildRow(icon: "doc.text", title: L10n.t("menu.service_agreement"), action: #selector(tapServiceAgreement)))
-        stack.addArrangedSubview(buildDivider())
-        stack.addArrangedSubview(buildRow(icon: "hand.raised", title: L10n.t("menu.privacy_policy"), action: #selector(tapPrivacyPolicy)))
-        stack.addArrangedSubview(buildDivider())
-        stack.addArrangedSubview(buildRow(icon: "envelope", title: L10n.t("menu.feedback"), action: #selector(tapFeedback)))
-        stack.addArrangedSubview(buildDivider())
-        stack.addArrangedSubview(buildRow(icon: "star", title: L10n.t("menu.rating"), action: #selector(tapRating)))
-        stack.addArrangedSubview(buildDivider())
-        stack.addArrangedSubview(buildRow(icon: "trash", title: L10n.t("menu.clear_cache"), action: #selector(tapClearCache)))
+        stack.addArrangedSubview(buildRow(icon: "info.circle", title: L10n.t("menu.about_us"), action: #selector(tapAbout)))
         stack.addArrangedSubview(buildDivider())
         stack.addArrangedSubview(buildRow(icon: "map", title: L10n.t("menu.map_type"), action: nil))
         stack.addArrangedSubview(buildMapTypeSelector())
@@ -93,6 +97,11 @@ final class SideMenuViewController: UIViewController {
         stack.addArrangedSubview(buildRow(icon: "location", title: L10n.t("menu.current_location"), action: nil))
         stack.addArrangedSubview(buildCurrentLocationLabel())
         stack.addArrangedSubview(buildBannerContainer())
+        refreshAccountEntries()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     // MARK: - 头部
@@ -127,6 +136,170 @@ final class SideMenuViewController: UIViewController {
             titleLabel.centerXAnchor.constraint(equalTo: container.centerXAnchor)
         ])
         return container
+    }
+
+    // MARK: - 账号与会员入口
+
+    private func buildAccountEntry() -> UIView {
+        let control = UIControl()
+        control.backgroundColor = UIColor(red: 0.945, green: 0.955, blue: 0.995, alpha: 0.96)
+        control.layer.cornerRadius = 14
+        control.layer.cornerCurve = .continuous
+        control.layer.borderWidth = 0.5
+        control.layer.borderColor = UIColor.systemIndigo.withAlphaComponent(0.12).cgColor
+        control.translatesAutoresizingMaskIntoConstraints = false
+        control.addTarget(self, action: #selector(tapAccount), for: .touchUpInside)
+
+        let iconContainer = UIView()
+        iconContainer.backgroundColor = UIColor.systemIndigo.withAlphaComponent(0.12)
+        iconContainer.layer.cornerRadius = 18
+        iconContainer.isUserInteractionEnabled = false
+        iconContainer.translatesAutoresizingMaskIntoConstraints = false
+
+        let iconView = UIImageView(image: UIImage(systemName: "person.fill"))
+        iconView.tintColor = .systemIndigo
+        iconView.contentMode = .scaleAspectFit
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        iconContainer.addSubview(iconView)
+
+        configureEntryLabel(accountTitleLabel, font: .systemFont(ofSize: 14, weight: .semibold), color: .label)
+        configureEntryLabel(accountSubtitleLabel, font: .systemFont(ofSize: 11), color: .secondaryLabel)
+
+        let textStack = UIStackView(arrangedSubviews: [accountTitleLabel, accountSubtitleLabel])
+        textStack.axis = .vertical
+        textStack.spacing = 3
+        textStack.isUserInteractionEnabled = false
+        textStack.translatesAutoresizingMaskIntoConstraints = false
+
+        let chevron = makeEntryChevron()
+
+        control.addSubview(iconContainer)
+        control.addSubview(textStack)
+        control.addSubview(chevron)
+        NSLayoutConstraint.activate([
+            control.heightAnchor.constraint(equalToConstant: 66),
+            iconContainer.leadingAnchor.constraint(equalTo: control.leadingAnchor, constant: 12),
+            iconContainer.centerYAnchor.constraint(equalTo: control.centerYAnchor),
+            iconContainer.widthAnchor.constraint(equalToConstant: 36),
+            iconContainer.heightAnchor.constraint(equalToConstant: 36),
+            iconView.centerXAnchor.constraint(equalTo: iconContainer.centerXAnchor),
+            iconView.centerYAnchor.constraint(equalTo: iconContainer.centerYAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: 18),
+            iconView.heightAnchor.constraint(equalToConstant: 18),
+            textStack.leadingAnchor.constraint(equalTo: iconContainer.trailingAnchor, constant: 11),
+            textStack.centerYAnchor.constraint(equalTo: control.centerYAnchor),
+            textStack.trailingAnchor.constraint(lessThanOrEqualTo: chevron.leadingAnchor, constant: -8),
+            chevron.trailingAnchor.constraint(equalTo: control.trailingAnchor, constant: -14),
+            chevron.centerYAnchor.constraint(equalTo: control.centerYAnchor),
+            chevron.widthAnchor.constraint(equalToConstant: 8)
+        ])
+
+        let wrapper = paddedEntryWrapper(control)
+        return wrapper
+    }
+
+    private func buildMembershipEntry() -> UIView {
+        let control = GoldenMembershipMenuControl()
+        control.layer.cornerRadius = 8
+        control.layer.cornerCurve = .continuous
+        control.layer.masksToBounds = true
+        control.translatesAutoresizingMaskIntoConstraints = false
+        control.addTarget(self, action: #selector(tapMembership), for: .touchUpInside)
+
+        let iconView = UIImageView(image: UIImage(systemName: "crown.fill"))
+        iconView.tintColor = UIColor(red: 0.96, green: 0.84, blue: 0.62, alpha: 1)
+        iconView.contentMode = .scaleAspectFit
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+
+        configureEntryLabel(
+            membershipTitleLabel,
+            font: .systemFont(ofSize: 14, weight: .bold),
+            color: UIColor(red: 0.96, green: 0.84, blue: 0.62, alpha: 1)
+        )
+        configureEntryLabel(
+            membershipSubtitleLabel,
+            font: .systemFont(ofSize: 11),
+            color: UIColor(red: 0.79, green: 0.67, blue: 0.47, alpha: 1)
+        )
+        let textStack = UIStackView(arrangedSubviews: [membershipTitleLabel, membershipSubtitleLabel])
+        textStack.axis = .vertical
+        textStack.spacing = 3
+        textStack.isUserInteractionEnabled = false
+        textStack.translatesAutoresizingMaskIntoConstraints = false
+
+        let chevron = makeEntryChevron(
+            tintColor: UIColor(red: 0.79, green: 0.67, blue: 0.47, alpha: 0.9)
+        )
+
+        control.addSubview(iconView)
+        control.addSubview(textStack)
+        control.addSubview(chevron)
+        NSLayoutConstraint.activate([
+            control.heightAnchor.constraint(equalToConstant: 66),
+            iconView.leadingAnchor.constraint(equalTo: control.leadingAnchor, constant: 17),
+            iconView.centerYAnchor.constraint(equalTo: control.centerYAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: 24),
+            iconView.heightAnchor.constraint(equalToConstant: 24),
+            textStack.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 13),
+            textStack.centerYAnchor.constraint(equalTo: control.centerYAnchor),
+            textStack.trailingAnchor.constraint(lessThanOrEqualTo: chevron.leadingAnchor, constant: -8),
+            chevron.trailingAnchor.constraint(equalTo: control.trailingAnchor, constant: -14),
+            chevron.centerYAnchor.constraint(equalTo: control.centerYAnchor),
+            chevron.widthAnchor.constraint(equalToConstant: 8)
+        ])
+
+        return paddedEntryWrapper(control)
+    }
+
+    private func makeEntryChevron(tintColor: UIColor = UIColor.label.withAlphaComponent(0.5)) -> UIImageView {
+        let configuration = UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
+        let chevron = UIImageView(image: UIImage(systemName: "chevron.right", withConfiguration: configuration))
+        chevron.tintColor = tintColor
+        chevron.contentMode = .scaleAspectFit
+        chevron.isUserInteractionEnabled = false
+        chevron.translatesAutoresizingMaskIntoConstraints = false
+        return chevron
+    }
+
+    private func paddedEntryWrapper(_ entry: UIView) -> UIView {
+        let wrapper = UIView()
+        wrapper.addSubview(entry)
+        NSLayoutConstraint.activate([
+            entry.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: 5),
+            entry.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -5),
+            entry.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 12),
+            entry.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -12)
+        ])
+        return wrapper
+    }
+
+    private func configureEntryLabel(_ label: UILabel, font: UIFont, color: UIColor) {
+        label.font = font
+        label.textColor = color
+        label.numberOfLines = 1
+        label.adjustsFontSizeToFitWidth = true
+        label.minimumScaleFactor = 0.8
+    }
+
+    @objc private func accountStateDidChange() {
+        refreshAccountEntries()
+    }
+
+    private func refreshAccountEntries() {
+        let session = NaviAccountSession.shared
+        accountTitleLabel.text = session.isLoggedIn ? session.maskedPhone : L10n.t("menu.account")
+        accountSubtitleLabel.text = session.isLoggedIn
+            ? L10n.t("menu.account_logged_in")
+            : L10n.t("menu.account_login_hint")
+
+        membershipTitleLabel.text = session.isVipActive
+            ? L10n.t("menu.membership_active")
+            : L10n.t("menu.membership")
+        if session.isVipActive, let expiresAt = session.vipExpiresAt {
+            membershipSubtitleLabel.text = String(format: L10n.t("menu.membership_expires"), expiresAt)
+        } else {
+            membershipSubtitleLabel.text = L10n.t("menu.membership_hint")
+        }
     }
 
     // MARK: - 通用行
@@ -179,6 +352,12 @@ final class SideMenuViewController: UIViewController {
             line.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -25)
         ])
         return wrapper
+    }
+
+    private func buildSpacer(height: CGFloat) -> UIView {
+        let spacer = UIView()
+        spacer.heightAnchor.constraint(equalToConstant: height).isActive = true
+        return spacer
     }
 
     // MARK: - 地图类型选择 (卫星图/普通图/路况图)
@@ -283,14 +462,38 @@ final class SideMenuViewController: UIViewController {
 
     // MARK: - 事件
 
+    @objc private func tapAccount() { delegate?.sideMenuDidSelectAccount(self) }
+    @objc private func tapMembership() { delegate?.sideMenuDidSelectMembership(self) }
     @objc private func tapPanorama() { delegate?.sideMenuDidSelectPanorama(self) }
     @objc private func tapWeather() { delegate?.sideMenuDidSelectWeather(self) }
-    @objc private func tapServiceAgreement() { delegate?.sideMenuDidSelectServiceAgreement(self) }
-    @objc private func tapPrivacyPolicy() { delegate?.sideMenuDidSelectPrivacyPolicy(self) }
-    @objc private func tapFeedback() { delegate?.sideMenuDidSelectFeedback(self) }
-    @objc private func tapRating() { delegate?.sideMenuDidSelectRating(self) }
-    @objc private func tapClearCache() { delegate?.sideMenuDidSelectClearCache(self) }
+    @objc private func tapAbout() { delegate?.sideMenuDidSelectAbout(self) }
     @objc private func tapSatellite() { delegate?.sideMenu(self, didSelectMapType: .satellite) }
     @objc private func tapNormal() { delegate?.sideMenu(self, didSelectMapType: .normal) }
     @objc private func tapTraffic() { delegate?.sideMenu(self, didSelectMapType: .traffic) }
+}
+
+private final class GoldenMembershipMenuControl: UIControl {
+    private let gradientLayer = CAGradientLayer()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        gradientLayer.colors = [
+            UIColor(red: 0.23, green: 0.12, blue: 0.05, alpha: 1).cgColor,
+            UIColor(red: 0.42, green: 0.23, blue: 0.12, alpha: 1).cgColor,
+            UIColor(red: 0.23, green: 0.12, blue: 0.05, alpha: 1).cgColor
+        ]
+        gradientLayer.startPoint = CGPoint(x: 0, y: 0.5)
+        gradientLayer.endPoint = CGPoint(x: 1, y: 0.5)
+        layer.insertSublayer(gradientLayer, at: 0)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        gradientLayer.frame = bounds
+    }
 }

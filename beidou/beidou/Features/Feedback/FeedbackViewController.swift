@@ -28,6 +28,9 @@ final class FeedbackViewController: UIViewController {
     private let placeholderLabel = UILabel()
     private let contactField = UITextField()
     private let submitButton = UIButton(type: .system)
+    private let topBar = UIView()
+    private let backButton = UIButton(type: .system)
+    private let titleLabel = UILabel()
 
     override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
         super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
@@ -45,7 +48,9 @@ final class FeedbackViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        overrideUserInterfaceStyle = .light
         view.backgroundColor = .systemGroupedBackground
+        setupTopBar()
         setupUI()
     }
 
@@ -57,6 +62,58 @@ final class FeedbackViewController: UIViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         UMengAnalytics.shared.pageEnd("FeedbackViewController")
+    }
+
+    private func setupTopBar() {
+        topBar.backgroundColor = .systemGroupedBackground
+        topBar.translatesAutoresizingMaskIntoConstraints = false
+
+        var configuration = UIButton.Configuration.filled()
+        configuration.image = UIImage(systemName: "chevron.left")
+        configuration.baseForegroundColor = .white
+        configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.16)
+        configuration.cornerStyle = .capsule
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
+        backButton.configuration = configuration
+        backButton.accessibilityLabel = L10n.t("common.back")
+        backButton.translatesAutoresizingMaskIntoConstraints = false
+        backButton.addTarget(self, action: #selector(tapBack), for: .touchUpInside)
+
+        titleLabel.text = L10n.t("feedback.title")
+        titleLabel.font = .systemFont(ofSize: 19, weight: .bold)
+        titleLabel.textColor = UIColor(red: 0.10, green: 0.12, blue: 0.17, alpha: 1)
+        titleLabel.textAlignment = .center
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        let separator = UIView()
+        separator.backgroundColor = .separator
+        separator.translatesAutoresizingMaskIntoConstraints = false
+
+        view.addSubview(topBar)
+        topBar.addSubview(backButton)
+        topBar.addSubview(titleLabel)
+        topBar.addSubview(separator)
+        NSLayoutConstraint.activate([
+            topBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            topBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            topBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            topBar.heightAnchor.constraint(equalToConstant: 58),
+
+            backButton.leadingAnchor.constraint(equalTo: topBar.leadingAnchor, constant: 12),
+            backButton.centerYAnchor.constraint(equalTo: topBar.centerYAnchor),
+            backButton.widthAnchor.constraint(equalToConstant: 42),
+            backButton.heightAnchor.constraint(equalToConstant: 42),
+
+            titleLabel.centerXAnchor.constraint(equalTo: topBar.centerXAnchor),
+            titleLabel.centerYAnchor.constraint(equalTo: topBar.centerYAnchor),
+            titleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: backButton.trailingAnchor, constant: 8),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: topBar.trailingAnchor, constant: -60),
+
+            separator.leadingAnchor.constraint(equalTo: topBar.leadingAnchor),
+            separator.trailingAnchor.constraint(equalTo: topBar.trailingAnchor),
+            separator.bottomAnchor.constraint(equalTo: topBar.bottomAnchor),
+            separator.heightAnchor.constraint(equalToConstant: 0.5)
+        ])
     }
 
     private func setupUI() {
@@ -115,7 +172,7 @@ final class FeedbackViewController: UIViewController {
         stack.addArrangedSubview(submitButton)
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.topAnchor.constraint(equalTo: topBar.bottomAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -134,6 +191,15 @@ final class FeedbackViewController: UIViewController {
             placeholderLabel.leadingAnchor.constraint(equalTo: contentTextView.leadingAnchor, constant: 15),
             placeholderLabel.trailingAnchor.constraint(lessThanOrEqualTo: contentTextView.trailingAnchor, constant: -12)
         ])
+    }
+
+    @objc private func tapBack() {
+        if let navigationController,
+           navigationController.viewControllers.first !== self {
+            navigationController.popViewController(animated: true)
+        } else {
+            dismiss(animated: true)
+        }
     }
 
     private func makeSection(title: String, view contentView: UIView) -> UIView {

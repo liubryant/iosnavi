@@ -81,7 +81,7 @@ final class PangleSplashAdManager: NSObject {
             completion?(false, nil)
             return
         }
-        guard !Constants.isCloseAd else {
+        guard !Constants.shouldCloseSplashAd else {
             didRequestSplashThisSession = true
             completion?(false, nil)
             return

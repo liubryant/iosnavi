@@ -79,7 +79,7 @@ private enum NaviWidgetFeature {
     var colors: [Color] {
         switch self {
         case .map: return [Color(red: 0.06, green: 0.34, blue: 0.86), Color(red: 0.08, green: 0.72, blue: 0.88)]
-        case .home: return [Color(red: 0.96, green: 0.42, blue: 0.16), Color(red: 1.00, green: 0.68, blue: 0.18)]
+        case .home: return [Color(red: 0.05, green: 0.55, blue: 0.30), Color(red: 0.20, green: 0.78, blue: 0.42)]
         case .work: return [Color(red: 0.06, green: 0.35, blue: 0.84), Color(red: 0.10, green: 0.64, blue: 0.94)]
         case .cloud: return [Color(red: 0.08, green: 0.48, blue: 0.93), Color(red: 0.16, green: 0.78, blue: 0.73)]
         case .typhoon: return [Color(red: 0.24, green: 0.26, blue: 0.90), Color(red: 0.55, green: 0.30, blue: 0.91)]

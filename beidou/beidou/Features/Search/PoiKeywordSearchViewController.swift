@@ -7,8 +7,10 @@
 //  使用高德 Web服务 关键字搜索接口，选中后通过 onSelect 回调返回。
 //
 
-import UIKit
+import AVFoundation
 import CoreLocation
+import Speech
+import UIKit
 
 #if canImport(AMapSearchKit)
 import AMapSearchKit
@@ -26,6 +28,19 @@ final class PoiKeywordSearchViewController: UIViewController {
     private let location: CurrentLocation?
     private let backButton = UIButton(type: .system)
     private let searchBar = UISearchBar()
+    private let voiceButton = UIButton(type: .system)
+    private let audioEngine = AVAudioEngine()
+    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    private var recognitionTask: SFSpeechRecognitionTask?
+    private var voiceSilenceWorkItem: DispatchWorkItem?
+    private var isVoiceRecognizing = false
+    private var hasInstalledAudioTap = false
+    private lazy var speechRecognizer: SFSpeechRecognizer? = {
+        let locale = Locale.current.languageCode == "zh"
+            ? Locale(identifier: "zh-CN")
+            : Locale.current
+        return SFSpeechRecognizer(locale: locale) ?? SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
+    }()
     #if canImport(AMapNaviKit)
     private let mapView = MAMapView()
     #else
@@ -68,6 +83,7 @@ final class PoiKeywordSearchViewController: UIViewController {
         searchBar.searchBarStyle = .minimal
         searchBar.backgroundImage = UIImage()
         searchBar.translatesAutoresizingMaskIntoConstraints = false
+        setupVoiceButton()
 
         setupMapPreview()
 
@@ -84,16 +100,22 @@ final class PoiKeywordSearchViewController: UIViewController {
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
 
         view.addSubview(searchBar)
+        view.addSubview(voiceButton)
         view.addSubview(mapView)
         view.addSubview(tableView)
         view.addSubview(statusLabel)
         NSLayoutConstraint.activate([
             searchBar.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
-            searchBar.leadingAnchor.constraint(equalTo: backButton.trailingAnchor, constant: 8),
-            searchBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            searchBar.leadingAnchor.constraint(equalTo: backButton.trailingAnchor, constant: 6),
+            searchBar.trailingAnchor.constraint(equalTo: voiceButton.leadingAnchor, constant: -6),
             searchBar.heightAnchor.constraint(equalToConstant: 42),
 
-            mapView.topAnchor.constraint(equalTo: searchBar.bottomAnchor),
+            voiceButton.centerYAnchor.constraint(equalTo: searchBar.centerYAnchor),
+            voiceButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+            voiceButton.widthAnchor.constraint(equalToConstant: 34),
+            voiceButton.heightAnchor.constraint(equalToConstant: 34),
+
+            mapView.topAnchor.constraint(equalTo: searchBar.bottomAnchor, constant: 8),
             mapView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             mapView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             mapView.heightAnchor.constraint(equalToConstant: 190),
@@ -111,9 +133,25 @@ final class PoiKeywordSearchViewController: UIViewController {
         showHistory()
     }
 
+    private func setupVoiceButton() {
+        var configuration = UIButton.Configuration.filled()
+        configuration.image = UIImage(systemName: "mic.fill")
+        configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
+        configuration.baseForegroundColor = .white
+        configuration.baseBackgroundColor = .systemBlue
+        configuration.cornerStyle = .capsule
+        configuration.contentInsets = .zero
+        voiceButton.configuration = configuration
+        voiceButton.accessibilityLabel = L10n.t("search.voice_start")
+        voiceButton.accessibilityHint = L10n.t("search.voice_hint")
+        voiceButton.translatesAutoresizingMaskIntoConstraints = false
+        voiceButton.addTarget(self, action: #selector(tapVoiceSearch), for: .touchUpInside)
+    }
+
     private func setupBackButton() {
         var configuration = UIButton.Configuration.filled()
         configuration.image = UIImage(systemName: "chevron.left")
+        configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
         configuration.baseForegroundColor = .white
         configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.16)
         configuration.cornerStyle = .capsule
@@ -127,8 +165,8 @@ final class PoiKeywordSearchViewController: UIViewController {
         NSLayoutConstraint.activate([
             backButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
             backButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
-            backButton.widthAnchor.constraint(equalToConstant: 42),
-            backButton.heightAnchor.constraint(equalToConstant: 42)
+            backButton.widthAnchor.constraint(equalToConstant: 34),
+            backButton.heightAnchor.constraint(equalToConstant: 34)
         ])
     }
 
@@ -144,6 +182,7 @@ final class PoiKeywordSearchViewController: UIViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        stopVoiceRecognition(performSearchAfterStopping: false)
         UMengAnalytics.shared.pageEnd("PoiKeywordSearchViewController")
     }
 
@@ -238,6 +277,220 @@ final class PoiKeywordSearchViewController: UIViewController {
         tableView.reloadData()
         statusLabel.text = results.isEmpty ? L10n.t("search.no_history") : nil
         statusLabel.isHidden = !results.isEmpty
+    }
+
+    // MARK: - 语音搜索
+
+    @objc private func tapVoiceSearch() {
+        if isVoiceRecognizing {
+            stopVoiceRecognition(performSearchAfterStopping: true)
+            return
+        }
+
+        requestVoicePermissions { [weak self] granted in
+            guard let self, granted else { return }
+            self.startVoiceRecognition()
+        }
+    }
+
+    private func requestVoicePermissions(completion: @escaping (Bool) -> Void) {
+        requestSpeechRecognitionPermission { [weak self] speechGranted in
+            guard let self else { return }
+            guard speechGranted else {
+                self.showVoicePermissionAlert()
+                completion(false)
+                return
+            }
+
+            let audioSession = AVAudioSession.sharedInstance()
+            switch audioSession.recordPermission {
+            case .granted:
+                completion(true)
+            case .denied:
+                self.showVoicePermissionAlert()
+                completion(false)
+            case .undetermined:
+                audioSession.requestRecordPermission { granted in
+                    DispatchQueue.main.async {
+                        if !granted { self.showVoicePermissionAlert() }
+                        completion(granted)
+                    }
+                }
+            @unknown default:
+                self.showVoicePermissionAlert()
+                completion(false)
+            }
+        }
+    }
+
+    private func requestSpeechRecognitionPermission(completion: @escaping (Bool) -> Void) {
+        switch SFSpeechRecognizer.authorizationStatus() {
+        case .authorized:
+            completion(true)
+        case .denied, .restricted:
+            completion(false)
+        case .notDetermined:
+            SFSpeechRecognizer.requestAuthorization { status in
+                DispatchQueue.main.async {
+                    completion(status == .authorized)
+                }
+            }
+        @unknown default:
+            completion(false)
+        }
+    }
+
+    private func startVoiceRecognition() {
+        guard let speechRecognizer, speechRecognizer.isAvailable else {
+            showVoiceMessage(
+                title: L10n.t("search.voice_unavailable_title"),
+                message: L10n.t("search.voice_unavailable_message")
+            )
+            return
+        }
+
+        stopVoiceRecognition(performSearchAfterStopping: false)
+        searchWorkItem?.cancel()
+        searchBar.resignFirstResponder()
+
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.record, mode: .measurement, options: [.duckOthers, .allowBluetoothHFP])
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+
+            let request = SFSpeechAudioBufferRecognitionRequest()
+            request.shouldReportPartialResults = true
+            recognitionRequest = request
+
+            let inputNode = audioEngine.inputNode
+            let recordingFormat = inputNode.outputFormat(forBus: 0)
+            guard recordingFormat.sampleRate > 0, recordingFormat.channelCount > 0 else {
+                throw NSError(
+                    domain: "PoiVoiceSearch",
+                    code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: L10n.t("search.voice_microphone_unavailable")]
+                )
+            }
+            inputNode.installTap(onBus: 0, bufferSize: 1_024, format: recordingFormat) { [weak request] buffer, _ in
+                request?.append(buffer)
+            }
+            hasInstalledAudioTap = true
+
+            audioEngine.prepare()
+            try audioEngine.start()
+            isVoiceRecognizing = true
+            updateVoiceButtonAppearance()
+            statusLabel.text = L10n.t("search.voice_listening")
+            statusLabel.isHidden = false
+
+            recognitionTask = speechRecognizer.recognitionTask(with: request) { [weak self] result, error in
+                DispatchQueue.main.async {
+                    guard let self, self.isVoiceRecognizing else { return }
+
+                    if let result {
+                        let transcript = result.bestTranscription.formattedString
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !transcript.isEmpty {
+                            self.searchBar.text = transcript
+                            self.statusLabel.text = L10n.t("search.voice_listening")
+                            self.scheduleVoiceSilenceFinish()
+                        }
+                        if result.isFinal {
+                            self.stopVoiceRecognition(performSearchAfterStopping: true)
+                            return
+                        }
+                    }
+
+                    if error != nil {
+                        let hasTranscript = !(self.searchBar.text ?? "")
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                            .isEmpty
+                        self.stopVoiceRecognition(performSearchAfterStopping: hasTranscript)
+                        if !hasTranscript {
+                            self.showVoiceMessage(
+                                title: L10n.t("search.voice_failed_title"),
+                                message: L10n.t("search.voice_failed_message")
+                            )
+                        }
+                    }
+                }
+            }
+        } catch {
+            stopVoiceRecognition(performSearchAfterStopping: false)
+            showVoiceMessage(title: L10n.t("search.voice_failed_title"), message: error.localizedDescription)
+        }
+    }
+
+    private func scheduleVoiceSilenceFinish() {
+        voiceSilenceWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard self?.isVoiceRecognizing == true else { return }
+            self?.stopVoiceRecognition(performSearchAfterStopping: true)
+        }
+        voiceSilenceWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4, execute: workItem)
+    }
+
+    private func stopVoiceRecognition(performSearchAfterStopping: Bool) {
+        guard isVoiceRecognizing || recognitionRequest != nil || audioEngine.isRunning else { return }
+        isVoiceRecognizing = false
+        voiceSilenceWorkItem?.cancel()
+        voiceSilenceWorkItem = nil
+
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        if hasInstalledAudioTap {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            hasInstalledAudioTap = false
+        }
+        recognitionRequest?.endAudio()
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        recognitionRequest = nil
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        updateVoiceButtonAppearance()
+
+        guard performSearchAfterStopping else { return }
+        let keyword = (searchBar.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if keyword.isEmpty {
+            showHistory()
+            showVoiceMessage(
+                title: L10n.t("search.voice_failed_title"),
+                message: L10n.t("search.voice_no_speech")
+            )
+        } else {
+            performSearch(keyword: keyword)
+        }
+    }
+
+    private func updateVoiceButtonAppearance() {
+        var configuration = voiceButton.configuration
+        configuration?.image = UIImage(systemName: isVoiceRecognizing ? "stop.fill" : "mic.fill")
+        configuration?.baseBackgroundColor = isVoiceRecognizing ? .systemRed : .systemBlue
+        voiceButton.configuration = configuration
+        voiceButton.accessibilityLabel = L10n.t(isVoiceRecognizing ? "search.voice_stop" : "search.voice_start")
+    }
+
+    private func showVoicePermissionAlert() {
+        let alert = UIAlertController(
+            title: L10n.t("search.voice_permission_title"),
+            message: L10n.t("search.voice_permission_message"),
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: L10n.t("common.cancel"), style: .cancel))
+        alert.addAction(UIAlertAction(title: L10n.t("search.open_settings"), style: .default) { _ in
+            guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+            UIApplication.shared.open(url)
+        })
+        present(alert, animated: true)
+    }
+
+    private func showVoiceMessage(title: String, message: String) {
+        guard presentedViewController == nil else { return }
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: L10n.t("common.ok"), style: .default))
+        present(alert, animated: true)
     }
 
     @objc private func tapBack() {
