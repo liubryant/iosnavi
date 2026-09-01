@@ -140,6 +140,13 @@ final class TTSController: NSObject {
     func speakDrive(_ text: String) {
         let playbackText = PersonalVoicePhrase.personalizedPlaybackText(text)
         let store = PersonalVoicePackStore.shared
+        // 首次安装或未启用个人语音包时，必须继续使用系统导航声线。
+        // activeGender 在没有语音包时是 male，直接进入个人语音兜底会导致
+        // 开始导航是女声、退出导航却突然切换成男声。
+        guard store.activePack != nil else {
+            speak(playbackText, voice: resolvedVoice())
+            return
+        }
         let isExactHit = store.hasExactAudio(for: playbackText)
         let audioURLs = store.audioURLs(for: playbackText)
         guard !audioURLs.isEmpty else {
@@ -166,7 +173,12 @@ final class TTSController: NSObject {
     func speakDriveClosing() {
         // 收尾播报独占当前音频队列，避免 SDK 的“退出导航”短提示插队或截断。
         stop()
-        speakDrive(PersonalVoicePhrase.closingAnnouncement)
+        let announcement = PersonalVoicePhrase.closingAnnouncement
+        if isUsingPersonalVoice {
+            speakDrive(announcement)
+        } else {
+            speak(announcement, voice: resolvedVoice())
+        }
     }
 
     /// 算路完成后后台预热路线文案；不等待、不影响开始导航。
@@ -197,14 +209,7 @@ final class TTSController: NSObject {
                 ?? AVSpeechSynthesisVoice(language: "zh-CN")
         }
 
-        let aliases = ["黎潋", "li-lian", "li_lian", "li lian", "lilian", "tingting", "meijia", "mei-jia"]
-        if let preferred = voices.first(where: { voice in
-            let searchable = "\(voice.name) \(voice.identifier)".lowercased()
-            return voice.language.lowercased().hasPrefix("zh") && aliases.contains { searchable.contains($0) }
-        }) { return preferred }
-        return voices.filter { $0.language.lowercased().hasPrefix("zh") && $0.gender == .female }
-            .sorted { $0.quality.rawValue > $1.quality.rawValue }.first
-            ?? AVSpeechSynthesisVoice(language: "zh-CN")
+        return preferredDefaultFemaleVoice()
     }
 
     /// 停止播报并清空队列 (对应 Android stopSpeaking)
@@ -370,17 +375,71 @@ final class TTSController: NSObject {
             return selectedVoice
         }
 
+        return preferredDefaultFemaleVoice()
+    }
+
+    /// 自动状态始终选择中文女声；用户在设置中手动选择的声音由
+    /// `resolvedVoice()` 上方分支直接返回，不受这里影响。
+    private func preferredDefaultFemaleVoice() -> AVSpeechSynthesisVoice? {
         let voices = AVSpeechSynthesisVoice.speechVoices()
-        if let liLianVoice = voices.first(where: { isChineseVoice($0) && isLiLianVoice($0) }) {
+        let mandarinVoices = voices.filter {
+            isMainlandChineseVoice($0) && !isExcludedVoice($0)
+        }
+
+        if let liLianVoice = voices.first(where: {
+            isChineseVoice($0) && isLiLianVoice($0) && $0.gender != .male && !isExcludedVoice($0)
+        }) {
             return liLianVoice
         }
 
+        if let declaredFemaleMandarin = bestVoice(
+            in: mandarinVoices.filter { $0.gender == .female }
+        ) {
+            return declaredFemaleMandarin
+        }
+
+        if let knownFemaleMandarin = bestVoice(
+            in: mandarinVoices.filter { isKnownFemaleVoice($0) && $0.gender != .male }
+        ) {
+            return knownFemaleMandarin
+        }
+
+        if let declaredFemaleChinese = bestVoice(
+            in: voices.filter {
+                isChineseVoice($0) && $0.gender == .female && !isExcludedVoice($0)
+            }
+        ) {
+            return declaredFemaleChinese
+        }
+
+        // 兼容旧系统及部分首次安装机型中 voice name/gender 元数据不完整的情况。
+        let knownFemaleVoiceIdentifiers = [
+            "com.apple.voice.compact.zh-CN.Tingting",
+            "com.apple.voice.compact.zh-CN.Ting-Ting",
+            "com.apple.ttsbundle.Ting-Ting-compact",
+            "com.apple.voice.compact.zh-CN.Li-Lian",
+            "com.apple.voice.compact.zh-TW.Meijia",
+            "com.apple.ttsbundle.Mei-Jia-compact",
+            "com.apple.ttsbundle.Sin-Ji-compact"
+        ]
+        for identifier in knownFemaleVoiceIdentifiers {
+            if let voice = AVSpeechSynthesisVoice(identifier: identifier),
+               voice.gender != .male,
+               !isExcludedVoice(voice) {
+                return voice
+            }
+        }
+
         if let systemMandarin = AVSpeechSynthesisVoice(language: "zh-CN"),
+           systemMandarin.gender != .male,
            !isExcludedVoice(systemMandarin) {
             return systemMandarin
         }
-        return voices.first(where: { isMainlandChineseVoice($0) && !isExcludedVoice($0) })
-            ?? voices.first(where: { isChineseVoice($0) && !isExcludedVoice($0) })
+
+        return bestVoice(in: mandarinVoices.filter { $0.gender != .male })
+            ?? bestVoice(in: voices.filter {
+                isChineseVoice($0) && $0.gender != .male && !isExcludedVoice($0)
+            })
     }
 
     private func isChineseVoice(_ voice: AVSpeechSynthesisVoice) -> Bool {
@@ -396,6 +455,29 @@ final class TTSController: NSObject {
         let searchable = "\(voice.name) \(voice.identifier)".lowercased()
         let aliases = ["黎潋", "li-lian", "li_lian", "li lian", "lilian"]
         return aliases.contains { searchable.contains($0) }
+    }
+
+    private func isKnownFemaleVoice(_ voice: AVSpeechSynthesisVoice) -> Bool {
+        if voice.gender == .female { return true }
+        if voice.gender == .male { return false }
+
+        let searchable = "\(voice.name) \(voice.identifier)".lowercased()
+        let aliases = [
+            "黎潋", "婷婷", "美佳",
+            "li-lian", "li_lian", "li lian", "lilian",
+            "tingting", "ting-ting", "mei-jia", "meijia",
+            "sin-ji", "sinji", "female", "siri"
+        ]
+        return aliases.contains { searchable.contains($0) }
+    }
+
+    private func bestVoice(in voices: [AVSpeechSynthesisVoice]) -> AVSpeechSynthesisVoice? {
+        voices.sorted { lhs, rhs in
+            if lhs.quality.rawValue != rhs.quality.rawValue {
+                return lhs.quality.rawValue > rhs.quality.rawValue
+            }
+            return lhs.identifier < rhs.identifier
+        }.first
     }
 
     private func isExcludedVoice(_ voice: AVSpeechSynthesisVoice) -> Bool {

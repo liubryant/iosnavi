@@ -18,6 +18,9 @@ import BaiduMapAPI_Map
 #if canImport(BaiduMapAPI_Base)
 import BaiduMapAPI_Base
 #endif
+#if canImport(BaiduMapAPI_Search)
+import BaiduMapAPI_Search
+#endif
 
 final class MapViewController: UIViewController {
 
@@ -82,6 +85,15 @@ final class MapViewController: UIViewController {
     private var selectedParkingAnnotation: BMKPointAnnotation?
     private var selectedParkingPlace: ParkingMapPlace?
     private lazy var parkingMarkerImage = Self.makeParkingMarkerImage()
+    #endif
+
+    #if canImport(BaiduMapAPI_Search)
+    private var poiDetailSearcher: BMKPoiSearch?
+    private var reverseGeoCodeSearcher: BMKGeoCodeSearch?
+    private weak var placeDetailViewController: MapPlaceDetailViewController?
+    private var pendingPlaceDetail: MapPlaceDetail?
+    private var pendingPOIDetailUID: String?
+    private var requestedPOIPhotos = false
     #endif
 
     private struct ParkingMapPlace {
@@ -152,6 +164,10 @@ final class MapViewController: UIViewController {
     deinit {
         mapResumeWorkItem?.cancel()
         automaticLocationFollowTimer?.invalidate()
+        #if canImport(BaiduMapAPI_Search)
+        poiDetailSearcher?.delegate = nil
+        reverseGeoCodeSearcher?.delegate = nil
+        #endif
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -1323,40 +1339,196 @@ final class MapViewController: UIViewController {
             mapView.addAnnotation(annotation)
         }
 
-        presentParkingPlace(place)
+        presentMapPlace(
+            name: place.name,
+            uid: mapPoi.uid,
+            coordinate: place.coordinate
+        )
     }
 
     private func presentParkingPlace(_ place: ParkingMapPlace) {
+        presentMapPlace(name: place.name, uid: nil, coordinate: place.coordinate)
+    }
+
+    private func presentMapPlace(name: String, uid: String?, coordinate: CLLocationCoordinate2D) {
         guard presentedViewController == nil else { return }
 
-        let message = String(
-            format: L10n.t("parking.location_format"),
-            place.name,
-            place.coordinate.latitude,
-            place.coordinate.longitude
+        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let provisional = MapPlaceDetail(
+            uid: uid?.trimmingCharacters(in: .whitespacesAndNewlines),
+            name: normalizedName.isEmpty ? "选择的位置" : normalizedName,
+            address: "",
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
+            category: "",
+            phone: "",
+            openingHours: "",
+            rating: nil,
+            price: nil,
+            alias: "",
+            contentTag: "",
+            semanticDescription: "",
+            photoURLs: []
         )
-        let alert = UIAlertController(
-            title: L10n.t("parking.popup_title"),
-            message: message,
-            preferredStyle: .alert
+
+        let cached = MapPlaceDetailCache.detail(for: provisional.cacheKey)
+        let controller = MapPlaceDetailViewController(
+            detail: cached ?? provisional,
+            isLoading: cached == nil
         )
-        alert.addAction(UIAlertAction(title: L10n.t("parking.navigate"), style: .default) { [weak self] _ in
-            guard let self else { return }
-            let gcj02 = CoordinateConverter.bd09ToGCJ02(place.coordinate)
-            let destination = SelectedPOI(
-                name: place.name,
-                address: place.name,
-                latitude: gcj02.latitude,
-                longitude: gcj02.longitude
-            )
-            self.navigationController?.pushViewController(
-                RoutePlanViewController(startLocation: self.currentLocation, destinationPOI: destination),
-                animated: true
-            )
-        })
-        alert.addAction(UIAlertAction(title: L10n.t("common.close"), style: .cancel))
-        present(alert, animated: true)
+        controller.onNavigate = { [weak self] detail in
+            self?.openRoutePlan(to: detail)
+        }
+        placeDetailViewController = controller
+        pendingPlaceDetail = cached == nil ? provisional : nil
+        present(controller, animated: true)
+
+        guard cached == nil else { return }
+        if let uid = provisional.uid, !uid.isEmpty {
+            requestPOIDetail(uid: uid, showPhotos: true)
+        } else {
+            requestReverseGeoCode(at: coordinate)
+        }
     }
+
+    private func openRoutePlan(to detail: MapPlaceDetail) {
+        let gcj02 = CoordinateConverter.bd09ToGCJ02(detail.coordinate)
+        let destination = SelectedPOI(
+            name: detail.name,
+            address: detail.address.isEmpty ? detail.name : detail.address,
+            latitude: gcj02.latitude,
+            longitude: gcj02.longitude
+        )
+        navigationController?.pushViewController(
+            RoutePlanViewController(startLocation: currentLocation, destinationPOI: destination),
+            animated: true
+        )
+    }
+
+    #if canImport(BaiduMapAPI_Search)
+    private func requestPOIDetail(uid: String, showPhotos: Bool) {
+        poiDetailSearcher?.delegate = nil
+        let searcher = BMKPoiSearch()
+        searcher.delegate = self
+        poiDetailSearcher = searcher
+        pendingPOIDetailUID = uid
+        requestedPOIPhotos = showPhotos
+
+        let option = BMKPOIDetailSearchOption()
+        option.poiUIDs = [uid]
+        option.scope = BMKPOISearchScopeType(rawValue: 2)!
+        option.showPhotos = showPhotos
+        option.extensionsAdcode = true
+        guard searcher.poiDetailSearch(option) else {
+            if showPhotos {
+                requestPOIDetail(uid: uid, showPhotos: false)
+                return
+            }
+            requestReverseGeoCode(at: pendingPlaceDetail?.coordinate ?? currentBD09Coordinate())
+            return
+        }
+    }
+
+    private func requestReverseGeoCode(at coordinate: CLLocationCoordinate2D) {
+        let searcher = BMKGeoCodeSearch()
+        searcher.delegate = self
+        reverseGeoCodeSearcher = searcher
+
+        let option = BMKReverseGeoCodeSearchOption()
+        option.location = coordinate
+        option.radius = 200
+        option.entirePoi = 1
+        option.sortStrategy = BMKReverseGeoSortType(rawValue: 2)
+        option.pageSize = 10
+        option.extensionsRoad = true
+        guard searcher.reverseGeoCode(option) else {
+            finishPlaceDetailLoading(message: "暂时无法获取更多地点信息，可直接规划路线。")
+            return
+        }
+    }
+
+    private func finishPlaceDetailLoading(message: String) {
+        placeDetailViewController?.finishLoading(message: message)
+        pendingPlaceDetail = nil
+        pendingPOIDetailUID = nil
+        requestedPOIPhotos = false
+        poiDetailSearcher?.delegate = nil
+        poiDetailSearcher = nil
+        reverseGeoCodeSearcher?.delegate = nil
+        reverseGeoCodeSearcher = nil
+    }
+
+    private func stringValue(_ value: String?) -> String {
+        value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private func detail(from poi: BMKPoiInfo, fallback: MapPlaceDetail) -> MapPlaceDetail {
+        let extra = poi.detailInfo
+        var photos = extra?.photos ?? []
+        if let image = extra?.image,
+           !image.isEmpty,
+           !photos.contains(image) {
+            photos.insert(image, at: 0)
+        }
+
+        let resolvedName = stringValue(poi.name)
+        let resolvedAddress = stringValue(poi.address)
+        let resolvedUID = stringValue(poi.uid)
+        let resolvedCoordinate = CLLocationCoordinate2DIsValid(poi.pt) ? poi.pt : fallback.coordinate
+        let rating = Double(extra?.overallRating ?? 0)
+        let price = Double(extra?.price ?? 0)
+
+        return MapPlaceDetail(
+            uid: resolvedUID.isEmpty ? fallback.uid : resolvedUID,
+            name: resolvedName.isEmpty ? fallback.name : resolvedName,
+            address: resolvedAddress.isEmpty ? fallback.address : resolvedAddress,
+            latitude: resolvedCoordinate.latitude,
+            longitude: resolvedCoordinate.longitude,
+            category: stringValue(extra?.tag).isEmpty ? stringValue(poi.tag) : stringValue(extra?.tag),
+            phone: stringValue(poi.phone),
+            openingHours: stringValue(extra?.openingHours),
+            rating: rating > 0 ? rating : nil,
+            price: price > 0 ? price : nil,
+            alias: stringValue(extra?.alias),
+            contentTag: stringValue(extra?.contentTag),
+            semanticDescription: fallback.semanticDescription,
+            photoURLs: photos.filter { !$0.isEmpty }
+        )
+    }
+
+    private func detail(from result: BMKReverseGeoCodeSearchResult, fallback: MapPlaceDetail) -> MapPlaceDetail {
+        let nearbyPOI = result.poiList.first
+        let resolvedCoordinate = CLLocationCoordinate2DIsValid(result.location) ? result.location : fallback.coordinate
+        let address = stringValue(result.formattedPoiAddress).isEmpty
+            ? stringValue(result.address)
+            : stringValue(result.formattedPoiAddress)
+        let semanticDescription = stringValue(result.sematicDescription)
+
+        guard let nearbyPOI else {
+            var detail = fallback
+            detail.address = address
+            detail.latitude = resolvedCoordinate.latitude
+            detail.longitude = resolvedCoordinate.longitude
+            detail.semanticDescription = semanticDescription
+            return detail
+        }
+
+        var detail = detail(from: nearbyPOI, fallback: fallback)
+        if fallback.name == "选择的位置" {
+            let nearbyName = stringValue(nearbyPOI.name)
+            if !nearbyName.isEmpty, nearbyPOI.distance <= 100 {
+                detail.name = nearbyName
+            }
+        }
+        if detail.address.isEmpty {
+            detail.address = address
+        }
+        detail.latitude = resolvedCoordinate.latitude
+        detail.longitude = resolvedCoordinate.longitude
+        detail.semanticDescription = semanticDescription
+        return detail
+    }
+    #endif
 
     private static func makeParkingMarkerImage() -> UIImage {
         let size = CGSize(width: 40, height: 46)
@@ -1683,12 +1855,20 @@ extension MapViewController: BMKMapViewDelegate {
 
     func mapView(_ mapView: BMKMapView, onClickedMapBlank coordinate: CLLocationCoordinate2D) {
         recordMapUserInteraction()
+        presentMapPlace(name: "选择的位置", uid: nil, coordinate: coordinate)
     }
 
     func mapView(_ mapView: BMKMapView, onClickedMapPoi mapPoi: BMKMapPoi) {
         recordMapUserInteraction()
-        guard isParkingMapPOI(mapPoi) else { return }
-        selectParkingMapPOI(mapPoi)
+        if isParkingMapPOI(mapPoi) {
+            selectParkingMapPOI(mapPoi)
+        } else {
+            presentMapPlace(
+                name: mapPoi.text ?? "选择的位置",
+                uid: mapPoi.uid,
+                coordinate: mapPoi.pt
+            )
+        }
     }
 
     func mapView(_ mapView: BMKMapView, didSelect view: BMKAnnotationView) {
@@ -1737,6 +1917,60 @@ extension MapViewController: BMKMapViewDelegate {
         return annotationView
     }
 }
+
+#if canImport(BaiduMapAPI_Search)
+extension MapViewController: BMKPoiSearchDelegate, BMKGeoCodeSearchDelegate {
+    func onGetPoiDetailResult(
+        _ searcher: BMKPoiSearch!,
+        result poiDetailResult: BMKPOIDetailSearchResult!,
+        errorCode: BMKSearchErrorCode
+    ) {
+        guard let fallback = pendingPlaceDetail else { return }
+        guard errorCode.rawValue == 0,
+              let poi = poiDetailResult?.poiInfoList.first else {
+            if requestedPOIPhotos, let uid = pendingPOIDetailUID {
+                requestPOIDetail(uid: uid, showPhotos: false)
+                return
+            }
+            requestReverseGeoCode(at: fallback.coordinate)
+            return
+        }
+
+        let resolved = detail(from: poi, fallback: fallback)
+        MapPlaceDetailCache.save(resolved, forKey: fallback.cacheKey)
+        placeDetailViewController?.update(with: resolved)
+        pendingPlaceDetail = nil
+        pendingPOIDetailUID = nil
+        requestedPOIPhotos = false
+        poiDetailSearcher?.delegate = nil
+        poiDetailSearcher = nil
+    }
+
+    func onGetReverseGeoCodeResult(
+        _ searcher: BMKGeoCodeSearch!,
+        result: BMKReverseGeoCodeSearchResult!,
+        errorCode: BMKSearchErrorCode
+    ) {
+        guard let fallback = pendingPlaceDetail else { return }
+        guard errorCode.rawValue == 0,
+              let result else {
+            finishPlaceDetailLoading(message: "暂时没有查询到更多地点资料，可直接规划路线。")
+            return
+        }
+
+        let resolved = detail(from: result, fallback: fallback)
+        MapPlaceDetailCache.save(resolved, forKey: fallback.cacheKey)
+        placeDetailViewController?.update(with: resolved)
+        pendingPlaceDetail = nil
+        pendingPOIDetailUID = nil
+        requestedPOIPhotos = false
+        poiDetailSearcher?.delegate = nil
+        poiDetailSearcher = nil
+        reverseGeoCodeSearcher?.delegate = nil
+        reverseGeoCodeSearcher = nil
+    }
+}
+#endif
 
 private final class HeadingLocationAnnotationView: BMKAnnotationView {
     private let directionFadeLayers: [CAShapeLayer] = (0..<32).map { _ in CAShapeLayer() }
