@@ -104,6 +104,67 @@ enum MapPlaceDetailCache {
     }
 }
 
+extension Notification.Name {
+    static let mapPlaceFavoritesDidChange = Notification.Name("mapPlaceFavoritesDidChange")
+}
+
+enum MapPlaceFavoriteStore {
+    private static let defaultsKey = "map.place.favorites.v1"
+    private static let maximumCount = 200
+
+    static func all() -> [MapPlaceDetail] {
+        guard let data = UserDefaults.standard.data(forKey: defaultsKey) else { return [] }
+        return (try? JSONDecoder().decode([MapPlaceDetail].self, from: data)) ?? []
+    }
+
+    static func isFavorite(_ detail: MapPlaceDetail) -> Bool {
+        all().contains { matches($0, detail) }
+    }
+
+    @discardableResult
+    static func toggle(_ detail: MapPlaceDetail) -> Bool {
+        var favorites = all()
+        let isNowFavorite: Bool
+        if let index = favorites.firstIndex(where: { matches($0, detail) }) {
+            favorites.remove(at: index)
+            isNowFavorite = false
+        } else {
+            favorites.insert(detail, at: 0)
+            favorites = Array(favorites.prefix(maximumCount))
+            MapPlaceDetailCache.save(detail)
+            isNowFavorite = true
+        }
+        save(favorites)
+        NotificationCenter.default.post(name: .mapPlaceFavoritesDidChange, object: nil)
+        return isNowFavorite
+    }
+
+    static func replaceFavorite(matching previous: MapPlaceDetail, with updated: MapPlaceDetail) {
+        var favorites = all()
+        guard let index = favorites.firstIndex(where: { matches($0, previous) }) else { return }
+        favorites[index] = updated
+        save(favorites)
+        MapPlaceDetailCache.save(updated)
+        NotificationCenter.default.post(name: .mapPlaceFavoritesDidChange, object: nil)
+    }
+
+    private static func matches(_ lhs: MapPlaceDetail, _ rhs: MapPlaceDetail) -> Bool {
+        if let lhsUID = lhs.uid, !lhsUID.isEmpty,
+           let rhsUID = rhs.uid, !rhsUID.isEmpty,
+           lhsUID == rhsUID {
+            return true
+        }
+        let lhsLocation = CLLocation(latitude: lhs.latitude, longitude: lhs.longitude)
+        let rhsLocation = CLLocation(latitude: rhs.latitude, longitude: rhs.longitude)
+        return lhsLocation.distance(from: rhsLocation) <= 8
+    }
+
+    private static func save(_ favorites: [MapPlaceDetail]) {
+        guard let data = try? JSONEncoder().encode(favorites) else { return }
+        UserDefaults.standard.set(data, forKey: defaultsKey)
+    }
+}
+
 private final class MapPlaceRemoteImageView: UIImageView {
     private static let cache = NSCache<NSString, UIImage>()
     private var task: URLSessionDataTask?
@@ -174,6 +235,7 @@ final class MapPlaceDetailViewController: UIViewController {
     private let galleryScrollView = UIScrollView()
     private let galleryStack = UIStackView()
     private let pageControl = UIPageControl()
+    private let favoriteButton = UIButton(type: .system)
     private let titleLabel = UILabel()
     private let badgesStack = UIStackView()
     private let rowsStack = UIStackView()
@@ -245,6 +307,23 @@ final class MapPlaceDetailViewController: UIViewController {
         pageControl.hidesForSinglePage = true
         pageControl.translatesAutoresizingMaskIntoConstraints = false
         galleryContainer.addSubview(pageControl)
+
+        favoriteButton.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.92)
+        favoriteButton.tintColor = .secondaryLabel
+        favoriteButton.layer.cornerRadius = 15
+        favoriteButton.layer.cornerCurve = .continuous
+        favoriteButton.layer.shadowColor = UIColor.black.cgColor
+        favoriteButton.layer.shadowOpacity = 0.16
+        favoriteButton.layer.shadowRadius = 5.5
+        favoriteButton.layer.shadowOffset = CGSize(width: 0, height: 2)
+        favoriteButton.setPreferredSymbolConfiguration(
+            UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold),
+            forImageIn: .normal
+        )
+        favoriteButton.accessibilityLabel = "收藏地点"
+        favoriteButton.addTarget(self, action: #selector(tapFavorite), for: .touchUpInside)
+        favoriteButton.translatesAutoresizingMaskIntoConstraints = false
+        galleryContainer.addSubview(favoriteButton)
         contentStack.addArrangedSubview(galleryContainer)
 
         titleLabel.font = .systemFont(ofSize: 24, weight: .bold)
@@ -349,12 +428,21 @@ final class MapPlaceDetailViewController: UIViewController {
             galleryStack.bottomAnchor.constraint(equalTo: galleryScrollView.contentLayoutGuide.bottomAnchor),
             galleryStack.heightAnchor.constraint(equalTo: galleryScrollView.frameLayoutGuide.heightAnchor),
             pageControl.centerXAnchor.constraint(equalTo: galleryContainer.centerXAnchor),
-            pageControl.bottomAnchor.constraint(equalTo: galleryContainer.bottomAnchor, constant: -6)
+            pageControl.bottomAnchor.constraint(equalTo: galleryContainer.bottomAnchor, constant: -6),
+            favoriteButton.topAnchor.constraint(equalTo: galleryContainer.topAnchor, constant: 12),
+            favoriteButton.trailingAnchor.constraint(equalTo: galleryContainer.trailingAnchor, constant: -12),
+            favoriteButton.widthAnchor.constraint(equalToConstant: 30),
+            favoriteButton.heightAnchor.constraint(equalToConstant: 30)
         ])
     }
 
     func update(with detail: MapPlaceDetail, message: String? = nil) {
+        let previousDetail = self.detail
+        let wasFavorite = MapPlaceFavoriteStore.isFavorite(previousDetail)
         self.detail = detail
+        if wasFavorite {
+            MapPlaceFavoriteStore.replaceFavorite(matching: previousDetail, with: detail)
+        }
         guard isViewLoaded else { return }
         applyDetail()
         setLoading(false, message: message)
@@ -371,6 +459,7 @@ final class MapPlaceDetailViewController: UIViewController {
         rebuildGallery()
         rebuildBadges()
         rebuildRows()
+        updateFavoriteButton(animated: false)
     }
 
     private func rebuildGallery() {
@@ -605,6 +694,53 @@ final class MapPlaceDetailViewController: UIViewController {
         let selected = detail
         dismiss(animated: true) { [weak self] in
             self?.onNavigate?(selected)
+        }
+    }
+
+    @objc private func tapFavorite() {
+        let isFavorite = MapPlaceFavoriteStore.toggle(detail)
+        updateFavoriteButton(isFavorite: isFavorite, animated: true)
+        let feedback = UIImpactFeedbackGenerator(style: .light)
+        feedback.impactOccurred()
+    }
+
+    private func updateFavoriteButton(animated: Bool) {
+        updateFavoriteButton(isFavorite: MapPlaceFavoriteStore.isFavorite(detail), animated: animated)
+    }
+
+    private func updateFavoriteButton(isFavorite: Bool, animated: Bool) {
+        let changes = {
+            self.favoriteButton.setImage(
+                UIImage(systemName: isFavorite ? "heart.fill" : "heart"),
+                for: .normal
+            )
+            self.favoriteButton.backgroundColor = isFavorite
+                ? UIColor(red: 0.95, green: 0.20, blue: 0.45, alpha: 1)
+                : UIColor.systemBackground.withAlphaComponent(0.92)
+            self.favoriteButton.tintColor = isFavorite ? .white : .label
+            self.favoriteButton.layer.borderWidth = isFavorite ? 2 : 0.6
+            self.favoriteButton.layer.borderColor = isFavorite
+                ? UIColor.white.cgColor
+                : UIColor.separator.withAlphaComponent(0.18).cgColor
+            self.favoriteButton.layer.shadowOpacity = isFavorite ? 0.22 : 0.16
+            self.favoriteButton.accessibilityLabel = isFavorite ? "取消收藏地点" : "收藏地点"
+        }
+        guard animated else {
+            changes()
+            return
+        }
+        UIView.transition(
+            with: favoriteButton,
+            duration: 0.2,
+            options: [.transitionCrossDissolve, .allowAnimatedContent],
+            animations: changes
+        )
+        UIView.animate(withDuration: 0.12, animations: {
+            self.favoriteButton.transform = CGAffineTransform(scaleX: 1.12, y: 1.12)
+        }) { _ in
+            UIView.animate(withDuration: 0.16) {
+                self.favoriteButton.transform = .identity
+            }
         }
     }
 

@@ -84,7 +84,9 @@ final class MapViewController: UIViewController {
     private weak var currentLocationAnnotationView: HeadingLocationAnnotationView?
     private var selectedParkingAnnotation: BMKPointAnnotation?
     private var selectedParkingPlace: ParkingMapPlace?
+    private var favoritePlaceAnnotations: [FavoritePlaceAnnotation] = []
     private lazy var parkingMarkerImage = Self.makeParkingMarkerImage()
+    private lazy var favoriteMarkerImage = Self.makeFavoriteMarkerImage()
     #endif
 
     #if canImport(BaiduMapAPI_Search)
@@ -124,6 +126,7 @@ final class MapViewController: UIViewController {
         setupBottomSearchSheet()
         setupHeadingUpdates()
         observeApplicationLifecycle()
+        reloadFavoritePlaceAnnotations()
 
         applyMapType(restoredMapType())
         refreshLocation(shouldCenterMap: true)
@@ -184,6 +187,16 @@ final class MapViewController: UIViewController {
             name: UIApplication.didBecomeActiveNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(favoritePlacesDidChange),
+            name: .mapPlaceFavoritesDidChange,
+            object: nil
+        )
+    }
+
+    @objc private func favoritePlacesDidChange() {
+        reloadFavoritePlaceAnnotations()
     }
 
     @objc private func applicationDidEnterBackground() {
@@ -464,7 +477,7 @@ final class MapViewController: UIViewController {
         cloudPanoramaButton.addTarget(self, action: #selector(tapCloudPanorama), for: .touchUpInside)
     }
 
-    // MARK: - 右侧悬浮按钮: 周边 / 天气 / 台风 / 路况
+    // MARK: - 右侧悬浮按钮: 720 / 天气 / 台风 / 路况 / 周边
 
     private func setupRightButtons() {
         let aroundButton = makeFloatingButton(icon: "mappin.and.ellipse", action: #selector(tapAround))
@@ -475,7 +488,7 @@ final class MapViewController: UIViewController {
         styleFloatingButton(trafficButton)
         trafficButton.addTarget(self, action: #selector(tapTraffic), for: .touchUpInside)
 
-        let stack = UIStackView(arrangedSubviews: [aroundButton, weatherButton, typhoonButton, trafficButton, cloudButton])
+        let stack = UIStackView(arrangedSubviews: [cloudButton, weatherButton, typhoonButton, trafficButton, aroundButton])
         stack.axis = .vertical
         stack.spacing = 14
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -1350,7 +1363,12 @@ final class MapViewController: UIViewController {
         presentMapPlace(name: place.name, uid: nil, coordinate: place.coordinate)
     }
 
-    private func presentMapPlace(name: String, uid: String?, coordinate: CLLocationCoordinate2D) {
+    private func presentMapPlace(
+        name: String,
+        uid: String?,
+        coordinate: CLLocationCoordinate2D,
+        savedDetail: MapPlaceDetail? = nil
+    ) {
         guard presentedViewController == nil else { return }
 
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1371,7 +1389,7 @@ final class MapViewController: UIViewController {
             photoURLs: []
         )
 
-        let cached = MapPlaceDetailCache.detail(for: provisional.cacheKey)
+        let cached = savedDetail ?? MapPlaceDetailCache.detail(for: provisional.cacheKey)
         let controller = MapPlaceDetailViewController(
             detail: cached ?? provisional,
             isLoading: cached == nil
@@ -1530,6 +1548,22 @@ final class MapViewController: UIViewController {
     }
     #endif
 
+    private func reloadFavoritePlaceAnnotations() {
+        #if canImport(BaiduMapAPI_Map)
+        if !favoritePlaceAnnotations.isEmpty {
+            mapView.removeAnnotations(favoritePlaceAnnotations)
+        }
+        var annotations: [FavoritePlaceAnnotation] = []
+        for detail in MapPlaceFavoriteStore.all() {
+            annotations.append(FavoritePlaceAnnotation(detail))
+        }
+        favoritePlaceAnnotations = annotations
+        if !favoritePlaceAnnotations.isEmpty {
+            mapView.addAnnotations(favoritePlaceAnnotations)
+        }
+        #endif
+    }
+
     private static func makeParkingMarkerImage() -> UIImage {
         let size = CGSize(width: 40, height: 46)
         let renderer = UIGraphicsImageRenderer(size: size)
@@ -1574,6 +1608,37 @@ final class MapViewController: UIViewController {
             text.draw(
                 at: CGPoint(x: (size.width - textSize.width) / 2, y: 5.5),
                 withAttributes: attributes
+            )
+        }
+    }
+
+    private static func makeFavoriteMarkerImage() -> UIImage {
+        let size = CGSize(width: 31, height: 31)
+        return UIGraphicsImageRenderer(size: size).image { context in
+            let graphics = context.cgContext
+            graphics.setShadow(
+                offset: CGSize(width: 0, height: 1.5),
+                blur: 3,
+                color: UIColor.black.withAlphaComponent(0.24).cgColor
+            )
+
+            let markerCircle = UIBezierPath(ovalIn: CGRect(x: 2.5, y: 2.5, width: 26, height: 26))
+            UIColor(red: 0.95, green: 0.20, blue: 0.45, alpha: 1).setFill()
+            markerCircle.fill()
+
+            graphics.setShadow(offset: .zero, blur: 0, color: nil)
+            UIColor.white.setStroke()
+            markerCircle.lineWidth = 2.1
+            markerCircle.stroke()
+
+            let symbolConfiguration = UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
+            guard let heart = UIImage(systemName: "heart.fill", withConfiguration: symbolConfiguration)?
+                .withTintColor(.white, renderingMode: .alwaysOriginal) else { return }
+            heart.draw(
+                at: CGPoint(
+                    x: (size.width - heart.size.width) / 2,
+                    y: (size.height - heart.size.height) / 2
+                )
             )
         }
     }
@@ -1873,6 +1938,17 @@ extension MapViewController: BMKMapViewDelegate {
 
     func mapView(_ mapView: BMKMapView, didSelect view: BMKAnnotationView) {
         recordMapUserInteraction()
+        if let favoriteAnnotation = view.annotation as? FavoritePlaceAnnotation {
+            mapView.deselectAnnotation(favoriteAnnotation, animated: false)
+            let detail = favoriteAnnotation.detail
+            presentMapPlace(
+                name: detail.name,
+                uid: detail.uid,
+                coordinate: detail.coordinate,
+                savedDetail: detail
+            )
+            return
+        }
         guard let selectedParkingAnnotation,
               view.annotation as AnyObject === selectedParkingAnnotation,
               let selectedParkingPlace else { return }
@@ -1881,6 +1957,18 @@ extension MapViewController: BMKMapViewDelegate {
     }
 
     func mapView(_ mapView: BMKMapView, viewFor annotation: BMKAnnotation) -> BMKAnnotationView? {
+        if annotation is FavoritePlaceAnnotation {
+            let identifier = "favoritePlace"
+            let reusableView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
+                ?? BMKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+            guard let annotationView = reusableView else { return nil }
+            annotationView.annotation = annotation
+            annotationView.image = favoriteMarkerImage
+            annotationView.centerOffset = .zero
+            annotationView.canShowCallout = false
+            return annotationView
+        }
+
         if let selectedParkingAnnotation,
            annotation as AnyObject === selectedParkingAnnotation {
             let identifier = "selectedParkingPlace"
@@ -1915,6 +2003,18 @@ extension MapViewController: BMKMapViewDelegate {
             animated: false
         )
         return annotationView
+    }
+}
+
+private final class FavoritePlaceAnnotation: BMKPointAnnotation {
+    let detail: MapPlaceDetail
+
+    init(_ detail: MapPlaceDetail) {
+        self.detail = detail
+        super.init()
+        coordinate = detail.coordinate
+        title = detail.name
+        subtitle = detail.address
     }
 }
 
