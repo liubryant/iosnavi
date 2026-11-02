@@ -63,6 +63,10 @@ final class MapViewController: UIViewController {
     private var isDraggingBottomSheet = false
     private var bottomSheetHistorySignature: String?
     private var lastBottomSheetWeatherCity: String?
+    private var lastBottomSheetWeatherRequestAt: Date?
+    private var isBottomSheetWeatherRequestInFlight = false
+    private var displayedBottomSheetWeatherSignature: String?
+    private let bottomSheetWeatherRefreshInterval: TimeInterval = 10 * 60
 
     private var currentMapType: MapDisplayType = .satellite
     private var currentLocation: CurrentLocation?
@@ -144,7 +148,6 @@ final class MapViewController: UIViewController {
         super.viewDidAppear(animated)
         refreshLocationWhenPageAppears()
         scheduleAutomaticLocationFollow()
-        scheduleCloudPanoramaWelcomeIfNeeded()
         ReviewPromptManager.requestSystemReviewIfEligibleAfterCloudScenes(in: self)
     }
 
@@ -477,7 +480,7 @@ final class MapViewController: UIViewController {
         cloudPanoramaButton.addTarget(self, action: #selector(tapCloudPanorama), for: .touchUpInside)
     }
 
-    // MARK: - 右侧悬浮按钮: 720 / 天气 / 台风 / 路况 / 周边
+    // MARK: - 右侧悬浮按钮: 天气 / 720 / 台风 / 路况 / 周边
 
     private func setupRightButtons() {
         let aroundButton = makeFloatingButton(icon: "mappin.and.ellipse", action: #selector(tapAround))
@@ -488,7 +491,7 @@ final class MapViewController: UIViewController {
         styleFloatingButton(trafficButton)
         trafficButton.addTarget(self, action: #selector(tapTraffic), for: .touchUpInside)
 
-        let stack = UIStackView(arrangedSubviews: [cloudButton, weatherButton, typhoonButton, trafficButton, aroundButton])
+        let stack = UIStackView(arrangedSubviews: [weatherButton, cloudButton, typhoonButton, trafficButton, aroundButton])
         stack.axis = .vertical
         stack.spacing = 14
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -1185,13 +1188,24 @@ final class MapViewController: UIViewController {
     private func loadBottomSheetWeatherIfNeeded(for location: CurrentLocation) {
         let candidates = weatherCityCandidates(for: location)
         let requestKey = candidates.joined(separator: "|")
-        guard !candidates.isEmpty, requestKey != lastBottomSheetWeatherCity else { return }
+        guard !candidates.isEmpty, !isBottomSheetWeatherRequestInFlight else { return }
+
+        if requestKey == lastBottomSheetWeatherCity,
+           let lastRequestAt = lastBottomSheetWeatherRequestAt,
+           Date().timeIntervalSince(lastRequestAt) < bottomSheetWeatherRefreshInterval {
+            return
+        }
+
         lastBottomSheetWeatherCity = requestKey
+        isBottomSheetWeatherRequestInFlight = true
         requestBottomSheetWeather(candidates: candidates, index: 0)
     }
 
     private func requestBottomSheetWeather(candidates: [String], index: Int) {
-        guard index < candidates.count else { return }
+        guard index < candidates.count else {
+            isBottomSheetWeatherRequestInFlight = false
+            return
+        }
 
         ApiClient.fetchWeatherDetail(city: candidates[index]) { [weak self] result in
             guard let self,
@@ -1207,15 +1221,14 @@ final class MapViewController: UIViewController {
                 return
             }
 
-            let icon = self.bottomSheetWeatherIcon(for: weather)
+            self.isBottomSheetWeatherRequestInFlight = false
+            self.lastBottomSheetWeatherRequestAt = Date()
             let cachedWeather = SpUtil.string(.lastLiveWeather)
             let cachedTemperature = SpUtil.string(.lastLiveTemperature)
             if weather != cachedWeather || temperature != cachedTemperature {
                 SpUtil.setString(weather, for: .lastLiveWeather)
                 SpUtil.setString(temperature, for: .lastLiveTemperature)
-                self.bottomSheetWeatherIconView.image = UIImage(systemName: icon.name)
-                self.bottomSheetWeatherIconView.tintColor = icon.color
-                self.bottomSheetTemperatureLabel.text = temperature.isEmpty ? "--°" : "\(temperature)°"
+                self.applyBottomSheetWeather(weather: weather, temperature: temperature)
             }
         }
     }
@@ -1224,6 +1237,14 @@ final class MapViewController: UIViewController {
         let weather = SpUtil.string(.lastLiveWeather)
         let temperature = SpUtil.string(.lastLiveTemperature)
         guard !weather.isEmpty || !temperature.isEmpty else { return }
+
+        applyBottomSheetWeather(weather: weather, temperature: temperature)
+    }
+
+    private func applyBottomSheetWeather(weather: String, temperature: String) {
+        let signature = "\(weather)|\(temperature)"
+        guard signature != displayedBottomSheetWeatherSignature else { return }
+        displayedBottomSheetWeatherSignature = signature
 
         let icon = bottomSheetWeatherIcon(for: weather)
         bottomSheetWeatherIconView.image = UIImage(systemName: icon.name)

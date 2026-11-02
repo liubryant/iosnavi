@@ -205,8 +205,10 @@
 "cloud.search_placeholder" = "搜索世界720全景、导览、景区";
 "cloud.empty" = "未找到相关全景";
 "world.coordinate_format" = "经纬度 %.6f, %.6f";
+"world.locating_coordinate" = "正在定位景区实际位置…";
 "world.no_baidu_panorama" = "该景区附近暂无可用百度全景数据";
 "world.loading" = "正在加载百度全景...";
+"world.nearest_panorama" = "已显示景区附近最近可用全景";
 "world.category.popular" = "热门";
 "world.category.north" = "华北";
 "world.category.east" = "华东";

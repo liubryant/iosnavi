@@ -136,7 +136,7 @@ final class WorldPanoramaListViewController: UIViewController {
     private func applySearch(_ text: String) {
         let query = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let categoryPlaces = WorldPanoramaPlace.places(in: selectedCategory)
-        places = query.isEmpty ? categoryPlaces : categoryPlaces.filter { $0.searchText.contains(query) }
+        places = query.isEmpty ? categoryPlaces : WorldPanoramaPlace.all.filter { $0.searchText.contains(query) }
         emptyLabel.isHidden = !places.isEmpty
         rebuildRows()
     }

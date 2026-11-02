@@ -15,7 +15,7 @@ import AMapSearchKit
 #endif
 
 /// 与个人语音包页面主按钮一致的蓝紫渐变。
-private enum RouteActionGradient {
+enum RouteActionGradient {
     static let primaryColors = [
             UIColor(red: 0.08, green: 0.58, blue: 1.00, alpha: 1),
             UIColor(red: 0.12, green: 0.38, blue: 0.94, alpha: 1),

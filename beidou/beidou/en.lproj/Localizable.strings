@@ -206,8 +206,10 @@
 "cloud.search_placeholder" = "Search 720 panoramas, tours, and scenic spots";
 "cloud.empty" = "No panoramas found";
 "world.coordinate_format" = "Coordinates %.6f, %.6f";
+"world.locating_coordinate" = "Locating the scenic area…";
 "world.no_baidu_panorama" = "No Baidu panorama data is available nearby";
 "world.loading" = "Loading Baidu Panorama...";
+"world.nearest_panorama" = "Showing the nearest available panorama";
 "world.category.popular" = "Popular";
 "world.category.north" = "North";
 "world.category.east" = "East";
